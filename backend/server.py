@@ -667,6 +667,19 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
                 {"$set": {"status": "failed", "error": "No concepts could be extracted. Try more detailed content."}}
             )
         else:
+            # Build risk summary: aggregate common_mistakes — no AI, pure data
+            risk_summary = []
+            seen = set()
+            for c in saved_concepts:
+                mistake = c.get("common_mistake", "").strip()
+                title = c.get("title", "")
+                if mistake and title and title not in seen:
+                    risk_summary.append({
+                        "concept": title,
+                        "misconception": mistake,
+                    })
+                    seen.add(title)
+
             await jobs_col.update_one(
                 {"_id": ObjectId(job_id)},
                 {"$set": {
@@ -675,6 +688,7 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
                     "concepts_extracted": len(saved_concepts),
                     "chunks_processed": len(chunks),
                     "concepts": saved_concepts,
+                    "risk_summary": risk_summary[:5],
                 }}
             )
     except Exception as e:
