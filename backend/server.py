@@ -1427,9 +1427,18 @@ async def evaluate_answer(req: EvaluateAnswerRequest, user=Depends(get_current_u
             "wrong_ideas_stated": [],
         }
 
-    # Run claim extraction + deterministic matching
-    match_result = await extract_claims_and_match_requirements(
-        req.user_answer, required_ideas, wrong_statements
+    # ── Step 1: Extract explicit claims (verbatim extraction, no judgment) ──
+    claims = await _extract_claims(
+        question=check.get("prompt", ""),
+        expected_answer=check.get("expected_answer", ""),
+        user_answer=req.user_answer,
+    )
+
+    # ── Step 2: Deterministic requirement matching ──
+    match_result = await _match_claims_to_requirements(
+        claims=claims,
+        required_ideas=required_ideas,
+        wrong_statements=wrong_statements,
     )
 
     covered = match_result["covered_ideas"]
