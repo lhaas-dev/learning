@@ -1466,4 +1466,5 @@ async def evaluate_answer(req: EvaluateAnswerRequest, user=Depends(get_current_u
         "covered_ideas": covered,
         "missing_ideas": missing,
         "wrong_ideas_stated": wrong_stated,
+        "extracted_claims": claims,  # What the system actually parsed from the student's answer
     }
