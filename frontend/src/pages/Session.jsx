@@ -363,8 +363,8 @@ export default function Session() {
     setRevealed(true);
     setExplanationOpen(false);
 
-    // Trigger evaluation if user wrote something
-    if (userAnswer.trim() && currentItem?.check?.id) {
+    // Trigger evaluation if user wrote something and check is not open-ended scenario
+    if (userAnswer.trim() && currentItem?.check?.id && currentItem.check.type !== 'scenario') {
       setEvaluating(true);
       try {
         const res = await evaluateAnswer(currentItem.check.id, userAnswer);
