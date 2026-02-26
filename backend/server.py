@@ -352,6 +352,85 @@ Return ONLY valid JSON, no other text."""
         }
 
 
+async def generate_session_debrief(wrong_items: list) -> dict:
+    """Generate Session Debrief from actual wrong-answer data only. No hallucination."""
+    if not wrong_items:
+        return {"top_gaps": [], "pattern": None}
+
+    system = (
+        "You are analyzing a student's learning session performance. "
+        "Use ONLY the session data provided below. "
+        "Do NOT introduce new concepts. "
+        "Do NOT rely on prior knowledge. "
+        "If no clear pattern exists, return null for pattern."
+    )
+    prompt = f"""You are analyzing a student's learning session.
+
+Use ONLY the session data provided below.
+Do NOT introduce new concepts.
+Do NOT rely on prior knowledge.
+If no clear pattern exists, return null for pattern.
+
+Session wrong answers:
+{json.dumps(wrong_items, ensure_ascii=False, indent=2)}
+
+Each item contains:
+- concept_name: the concept being tested
+- check_type: type of check failed (recall/contrast/scenario/error)
+- expected_answer: the correct answer
+- user_answer: what the student wrote (may be empty)
+- common_mistake: the known typical misconception for this concept
+
+Your task:
+1. Identify top knowledge gaps (max 3), ranked by severity. For each gap write:
+   - concept_name
+   - risk_reason: one sentence explaining why this gap is dangerous
+   - detected_issue: what specifically went wrong, derived from the data
+
+2. If there is ONE clear dominant error pattern across multiple mistakes, describe it in one sentence.
+   If no clear pattern: return null.
+   Do NOT invent a pattern from a single mistake.
+
+Return ONLY valid JSON:
+{{
+  "top_gaps": [
+    {{
+      "concept_name": "...",
+      "risk_reason": "...",
+      "detected_issue": "..."
+    }}
+  ],
+  "pattern": "one sentence or null"
+}}"""
+
+    try:
+        response = await call_claude(system, prompt)
+        result = extract_json(response)
+        # Validate structure
+        if not isinstance(result, dict):
+            return {"top_gaps": [], "pattern": None}
+        result["top_gaps"] = result.get("top_gaps", [])[:3]
+        # Normalize pattern: null string → None
+        if result.get("pattern") in ("null", "None", ""):
+            result["pattern"] = None
+        return result
+    except Exception as e:
+        logger.warning(f"Debrief generation failed: {e}")
+        # Graceful fallback: build from raw data, no AI
+        gaps = []
+        seen = set()
+        for item in wrong_items[:3]:
+            cname = item.get("concept_name", "")
+            if cname and cname not in seen:
+                seen.add(cname)
+                gaps.append({
+                    "concept_name": cname,
+                    "risk_reason": item.get("common_mistake") or "Review this concept.",
+                    "detected_issue": f"Failed {item.get('check_type', 'recall')} check.",
+                })
+        return {"top_gaps": gaps, "pattern": None}
+
+
 # ─── Risk & Session Engine ────────────────────────────────────────────────────
 EXAM_WEIGHT_MAP = {"low": 0.5, "medium": 1.0, "high": 1.5}
 SESSION_SIZES = {10: 8, 20: 15, 30: 22}
