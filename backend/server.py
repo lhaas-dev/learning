@@ -48,6 +48,7 @@ checks_col = db["checks"]
 ucs_col = db["user_concept_states"]
 review_col = db["review_events"]
 sessions_col = db["sessions"]
+jobs_col = db["upload_jobs"]
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 JWT_SECRET = os.environ.get("JWT_SECRET")
