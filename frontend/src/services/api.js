@@ -46,6 +46,9 @@ export const startSession = (packId, durationMinutes) =>
 
 export const answerSession = (data) => api.post('/api/sessions/answer', data);
 export const getSession = (sessionId) => api.get(`/api/sessions/${sessionId}`);
+export const getSessionDebrief = (sessionId) => api.get(`/api/sessions/${sessionId}/debrief`);
+export const startDrillSession = (conceptIds) =>
+  api.post('/api/sessions/drill', { concept_ids: conceptIds });
 
 // Dashboard
 export const getDashboardOverview = () => api.get('/api/dashboard/overview');
