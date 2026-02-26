@@ -759,6 +759,14 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
                 if raw_checks:
                     approved_checks = await quality_filter_checks(raw_checks)
                     for chk in approved_checks:
+                        raw_reqs = chk.get("answer_requirements", {})
+                        # Normalize: LLM may return a flat list instead of the expected dict
+                        if isinstance(raw_reqs, dict):
+                            normalized_reqs = raw_reqs
+                        elif isinstance(raw_reqs, list):
+                            normalized_reqs = {"required_ideas": raw_reqs, "wrong_statements": []}
+                        else:
+                            normalized_reqs = {"required_ideas": [], "wrong_statements": []}
                         await checks_col.insert_one({
                             "concept_id": concept_id,
                             "type": chk.get("type", "recall"),
@@ -766,10 +774,7 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
                             "expected_answer": chk.get("expected_answer", ""),
                             "explanation": chk.get("short_explanation", chk.get("explanation", "")),
                             "difficulty_hint": "medium",
-                            "answer_requirements": chk.get("answer_requirements", {
-                                "required_ideas": [],
-                                "wrong_statements": [],
-                            }),
+                            "answer_requirements": normalized_reqs,
                         })
 
                 concept_doc["id"] = concept_id
