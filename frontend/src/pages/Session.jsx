@@ -104,7 +104,14 @@ function EvaluationPanel({ evaluation, evaluating }) {
   }
   if (!evaluation) return null;
 
-  const { result, summary, covered_ideas = [], missing_ideas = [], wrong_ideas_stated = [] } = evaluation;
+  const {
+    result,
+    summary,
+    covered_ideas = [],
+    missing_ideas = [],
+    wrong_ideas_stated = [],
+    extracted_claims = [],
+  } = evaluation;
 
   if (result === 'no_answer' || result === 'no_requirements') {
     return null; // No evaluation to show
@@ -121,7 +128,7 @@ function EvaluationPanel({ evaluation, evaluating }) {
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-2"
+      className="space-y-3"
       data-testid="evaluation-panel"
     >
       {/* Summary sentence */}
@@ -132,6 +139,25 @@ function EvaluationPanel({ evaluation, evaluating }) {
       >
         {summary}
       </p>
+
+      {/* Extracted claims — "We understood your answer as:" */}
+      {extracted_claims.length > 0 && (
+        <div data-testid="extracted-claims">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Eye size={10} className="text-text-muted flex-shrink-0" />
+            <span className="text-xs font-mono text-text-muted uppercase tracking-widest">
+              We understood your answer as
+            </span>
+          </div>
+          <div className="space-y-1 pl-1 border-l border-white/10">
+            {extracted_claims.map((claim, i) => (
+              <p key={i} className="text-xs text-text-secondary leading-relaxed" data-testid={`claim-${i}`}>
+                {claim}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Covered ideas */}
       {covered_ideas.length > 0 && (
@@ -166,7 +192,7 @@ function EvaluationPanel({ evaluation, evaluating }) {
             <div key={i} className="flex items-start gap-2 text-xs">
               <XCircle size={11} className="text-risk-high flex-shrink-0 mt-0.5" />
               <span className="text-text-secondary">
-                <span className="text-risk-high/70">Incorrect: </span>{idea}
+                <span className="text-risk-high/70">Incorrect assumption: </span>{idea}
               </span>
             </div>
           ))}
