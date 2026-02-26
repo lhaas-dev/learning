@@ -441,6 +441,10 @@ class AnswerRequest(BaseModel):
     user_answer: str = ""
 
 
+class DrillSessionRequest(BaseModel):
+    concept_ids: list  # top 1-2 concept IDs from debrief
+
+
 # ─── Auth Routes ──────────────────────────────────────────────────────────────
 @app.post("/api/auth/register")
 async def register(req: RegisterRequest):
