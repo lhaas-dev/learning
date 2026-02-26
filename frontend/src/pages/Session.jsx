@@ -514,13 +514,13 @@ export default function Session() {
             {revealed && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
 
-                {/* Core answer — prominent, single sentence */}
+                {/* Block 1: Correct answer (core idea) */}
                 <div className="glass-card p-5 border border-risk-low/20" data-testid="correct-answer-panel">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle2 size={13} className="text-risk-low" />
-                    <span className="text-xs font-mono text-risk-low uppercase tracking-widest">Core Answer</span>
+                    <span className="text-xs font-mono text-risk-low uppercase tracking-widest">Correct answer (core idea)</span>
                   </div>
-                  <p className="text-text-primary text-sm font-medium leading-relaxed" data-testid="correct-answer-text">
+                  <p className="text-text-primary text-sm font-semibold leading-relaxed" data-testid="correct-answer-text">
                     {check.expected_answer || 'No expected answer defined'}
                   </p>
 
@@ -549,43 +549,15 @@ export default function Session() {
                   )}
                 </div>
 
-                {/* Evaluation: covered / missing / wrong */}
-                {(evaluating || evaluation) && (
-                  <div className="glass-card p-4 border border-white/5">
-                    <EvaluationPanel evaluation={evaluation} evaluating={evaluating} />
-                  </div>
-                )}
+                {/* Blocks 2, 3, 4: What we understood / Missing / Incorrect assumptions */}
+                <EvaluationPanel
+                  evaluation={evaluation}
+                  evaluating={evaluating}
+                  hasAnswer={!!userAnswer.trim()}
+                  checkType={check.type}
+                />
 
-                {/* User's written answer (if any) */}
-                {userAnswer.trim() && (
-                  <div className="glass-card p-4 border border-white/5">
-                    <div className="text-xs font-mono text-text-muted mb-1 uppercase tracking-widest">Your Answer</div>
-                    <p className="text-sm text-text-secondary">{userAnswer}</p>
-                  </div>
-                )}
-
-                {/* Risk message after rating */}
-                <AnimatePresence>
-                  {riskMessage && (
-                    <motion.div
-                      key="risk-msg"
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="text-xs font-mono py-2 px-3 rounded border"
-                      style={{
-                        color: RATING_CONFIG[riskRating]?.color,
-                        borderColor: RATING_CONFIG[riskRating]?.border,
-                        background: RATING_CONFIG[riskRating]?.bg,
-                      }}
-                      data-testid="risk-message"
-                    >
-                      {riskMessage}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Rating buttons — new honest labels, middle options slightly emphasized */}
+                {/* Rating buttons */}
                 {!riskMessage && (
                   <div className="grid grid-cols-4 gap-2" data-testid="rating-buttons">
                     {Object.entries(RATING_CONFIG).map(([key, cfg]) => {
@@ -604,7 +576,7 @@ export default function Session() {
                           style={{ background: cfg.bg, borderColor: cfg.border, color: cfg.color }}
                         >
                           <Icon size={cfg.emphasis ? 15 : 13} />
-                          <span className={`font-mono font-bold ${cfg.emphasis ? 'text-xs' : 'text-xs'} text-center leading-tight`}>
+                          <span className="font-mono font-bold text-xs text-center leading-tight">
                             {cfg.label}
                           </span>
                         </button>
@@ -612,6 +584,18 @@ export default function Session() {
                     })}
                   </div>
                 )}
+
+                {/* System risk feedback — 1 line, after rating click */}
+                {riskMessage && (
+                  <p
+                    className="text-xs font-mono py-1"
+                    style={{ color: RATING_CONFIG[riskRating]?.color }}
+                    data-testid="risk-message"
+                  >
+                    {riskMessage}
+                  </p>
+                )}
+
               </motion.div>
             )}
           </motion.div>
