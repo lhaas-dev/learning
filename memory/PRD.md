@@ -88,6 +88,11 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 - [x] Session page (question reveal, rating buttons, micro-fix panel)
 - [x] Session Debrief screen (Top Knowledge Risks, Dominant Pattern, 5-Min Fix Drill CTA)
 - [x] Drill session flow (navigates to active session targeting weak concepts)
+- [x] EvaluationPanel — full assisted self-assessment UI:
+  - "We understood your answer as:" (extracted_claims) — NEW (Feb 2026)
+  - Covered ideas (green check), Missing ideas (red X), Incorrect assumptions (red X)
+  - Color-coded summary (correct/partially_correct/incorrect)
+  - Loading spinner during AI evaluation
 
 ---
 
