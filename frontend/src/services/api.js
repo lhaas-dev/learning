@@ -50,6 +50,10 @@ export const getSessionDebrief = (sessionId) => api.get(`/api/sessions/${session
 export const startDrillSession = (conceptIds) =>
   api.post('/api/sessions/drill', { concept_ids: conceptIds });
 
+// Answer Evaluation
+export const evaluateAnswer = (checkId, userAnswer) =>
+  api.post('/api/checks/evaluate', { check_id: checkId, user_answer: userAnswer });
+
 // Dashboard
 export const getDashboardOverview = () => api.get('/api/dashboard/overview');
 
