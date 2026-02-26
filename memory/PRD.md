@@ -70,21 +70,23 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 - [x] GET /api/jobs/:id → poll for processing status
 - [x] GET /api/packs/:id/concepts, PATCH /api/concepts/:id, DELETE /api/concepts/:id
 - [x] POST /api/sessions/start (risk-sorted queue)
-- [x] POST /api/sessions/answer (stability/recall updates + micro-fix)
+- [x] POST /api/sessions/answer (stability/recall updates + micro-fix + session_id tracking in review events)
 - [x] GET /api/sessions/:id
-- [x] GET /api/dashboard/overview
-- [x] AI Pipeline: concept extraction, check generation (4 types), quality filtering, micro-fix
-- [x] RAG: source-only constraints (no hallucination, returns INSUFFICIENT_SOURCE_INFORMATION)
+- [x] GET /api/sessions/:id/debrief (Claude, session-data-only, graceful fallback)
+- [x] POST /api/sessions/drill (5-min fix drill, recall+contrast only, max 2 concepts)
+- [x] GET /api/dashboard/overview (includes drill session labeling)
+- [x] AI Pipeline: concept extraction, check generation (4 types), quality filtering, micro-fix, session debrief
+- [x] RAG: source-only constraints, no hallucination, returns INSUFFICIENT_SOURCE_INFORMATION
 - [x] Chunking: 300-600 word chunks at paragraph boundaries
 
 ### Frontend
 - [x] Auth page (login/register, split-screen design)
-- [x] Dashboard (command center grid, stats, weakest concepts, session history)
+- [x] Dashboard (command center grid, stats, weakest concepts, session history + DRILL badge)
 - [x] Study Pack Detail (concept cards with risk badges, inline editing, exam weight)
 - [x] Upload page (text paste + PDF, async polling, progress indicator)
 - [x] Session page (question reveal, rating buttons, micro-fix panel)
-- [x] Session complete screen (score + per-rating breakdown)
-- [x] Navbar with user email + logout
+- [x] Session Debrief screen (Top Knowledge Risks, Dominant Pattern, 5-Min Fix Drill CTA)
+- [x] Drill session flow (navigates to active session targeting weak concepts)
 
 ---
 
