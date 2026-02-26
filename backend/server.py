@@ -227,15 +227,19 @@ Generate EXACTLY 4 checks:
 Rules:
 - Each check must test ONE idea only.
 - Avoid vague verbs ("explain", "discuss").
-- Answers must be short, precise and objectively verifiable.
+- expected_answer must be a single exam-grade sentence — the core answer that captures the essential rule or distinction. No padding.
+- short_explanation is 1-2 sentences of additional context only.
 - Do not include trick questions.
 - Assume exam pressure and time constraints.
 
 For each check, return:
 - type (recall | contrast | scenario | error)
 - prompt
-- expected_answer
-- short_explanation
+- expected_answer (single sentence, exam-grade core answer)
+- short_explanation (1-2 sentences additional context)
+- answer_requirements:
+    - required_ideas: list of 2-4 short phrases that MUST be present in a correct answer
+    - wrong_statements: list of 1-3 short phrases that would be explicitly incorrect for this question
 
 Return the result as JSON array. Return ONLY valid JSON, no other text."""
 
