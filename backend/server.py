@@ -1035,6 +1035,127 @@ async def answer_session(req: AnswerRequest, user=Depends(get_current_user)):
     }
 
 
+# ─── Session Debrief Route ────────────────────────────────────────────────────
+@app.get("/api/sessions/{session_id}/debrief")
+async def get_session_debrief(session_id: str, user=Depends(get_current_user)):
+    user_id = str(user["_id"])
+    try:
+        session = await sessions_col.find_one({
+            "_id": ObjectId(session_id),
+            "user_id": user_id,
+        })
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid session ID")
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get all review events for this session
+    wrong_items = []
+    async for event in review_col.find({
+        "session_id": session_id,
+        "user_id": user_id,
+        "rating": {"$in": ["again", "hard"]},
+    }):
+        concept = await concepts_col.find_one({"_id": ObjectId(event["concept_id"])})
+        check = await checks_col.find_one({"_id": ObjectId(event["check_id"])})
+        if concept and check:
+            wrong_items.append({
+                "concept_id": event["concept_id"],
+                "concept_name": concept.get("title", ""),
+                "check_type": check.get("type", "recall"),
+                "expected_answer": check.get("expected_answer", ""),
+                "user_answer": event.get("user_answer", ""),
+                "common_mistake": concept.get("common_mistake", ""),
+                "rating": event["rating"],
+            })
+
+    # Build debrief — AI only if we have wrong answers
+    debrief = await generate_session_debrief(wrong_items)
+
+    # Top concept IDs for drill (unique, max 2)
+    seen_ids = []
+    for item in wrong_items:
+        cid = item["concept_id"]
+        if cid not in seen_ids:
+            seen_ids.append(cid)
+        if len(seen_ids) == 2:
+            break
+
+    return {
+        "session_id": session_id,
+        "wrong_count": len(wrong_items),
+        "top_gaps": debrief.get("top_gaps", []),
+        "pattern": debrief.get("pattern"),
+        "drill_concept_ids": seen_ids,
+        "can_drill": len(seen_ids) > 0,
+    }
+
+
+@app.post("/api/sessions/drill")
+async def start_drill_session(req: DrillSessionRequest, user=Depends(get_current_user)):
+    """5-minute fix drill using only recall + contrast checks for specified concepts."""
+    user_id = str(user["_id"])
+
+    if not req.concept_ids:
+        raise HTTPException(status_code=400, detail="No concepts specified for drill")
+
+    queue = []
+    for concept_id in req.concept_ids[:2]:  # Max 2 concepts
+        try:
+            concept = await concepts_col.find_one({"_id": ObjectId(concept_id)})
+        except Exception:
+            continue
+        if not concept:
+            continue
+
+        # Force recall first, then contrast — per spec (no scenarios, no fluff)
+        for check_type in ["recall", "contrast"]:
+            check = await checks_col.find_one({"concept_id": concept_id, "type": check_type})
+            if check:
+                queue.append({
+                    "concept_id": concept_id,
+                    "check_id": str(check["_id"]),
+                    "risk": 1.0,  # Max risk — these are the problem areas
+                    "recall": 0.0,
+                    "is_drill": True,
+                })
+
+    if not queue:
+        raise HTTPException(status_code=400, detail="No drill checks available for these concepts")
+
+    session_doc = {
+        "user_id": user_id,
+        "pack_id": None,
+        "duration_minutes": 5,
+        "is_drill": True,
+        "queue": queue,
+        "current_index": 0,
+        "started_at": datetime.now(timezone.utc),
+        "completed_at": None,
+        "stats": {"again": 0, "hard": 0, "good": 0, "easy": 0},
+        "total": len(queue),
+    }
+    result = await sessions_col.insert_one(session_doc)
+    session_id = str(result.inserted_id)
+
+    first = queue[0]
+    concept = await concepts_col.find_one({"_id": ObjectId(first["concept_id"])})
+    check = await checks_col.find_one({"_id": ObjectId(first["check_id"])})
+
+    return {
+        "session_id": session_id,
+        "total": len(queue),
+        "current_index": 0,
+        "is_drill": True,
+        "current_item": {
+            "concept": doc_id(concept) if concept else None,
+            "check": doc_id(check) if check else None,
+            "position": 1,
+            "total": len(queue),
+        },
+    }
+
+
 # ─── Dashboard Routes ─────────────────────────────────────────────────────────
 @app.get("/api/dashboard/overview")
 async def dashboard_overview(user=Depends(get_current_user)):
