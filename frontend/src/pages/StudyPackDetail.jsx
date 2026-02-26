@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Upload, Play, Pencil, Trash2, Check, X,
-  BookOpen, AlertTriangle, Loader2, ChevronDown
+  BookOpen, AlertTriangle, Loader2, ChevronDown,
+  AlertCircle, CheckCircle, Flame, GitBranch, Target
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { getPack, listConcepts, updateConcept, deleteConcept, startSession } from '../services/api';
