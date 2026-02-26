@@ -506,9 +506,98 @@ async def get_pack(pack_id: str, user=Depends(get_current_user)):
     return doc_id(pack)
 
 
-# ─── Upload & AI Pipeline ─────────────────────────────────────────────────────
+# ─── Upload & AI Pipeline (Background Task) ──────────────────────────────────
+
+async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
+    """Background task: extract concepts + checks, update job status."""
+    try:
+        await jobs_col.update_one(
+            {"_id": ObjectId(job_id)},
+            {"$set": {"status": "processing", "started_at": datetime.now(timezone.utc)}}
+        )
+
+        chunks = chunk_text(raw_text)
+        if not chunks:
+            await jobs_col.update_one(
+                {"_id": ObjectId(job_id)},
+                {"$set": {"status": "failed", "error": "Text too short to process"}}
+            )
+            return
+
+        saved_concepts = []
+        for chunk in chunks[:6]:
+            extracted = await extract_concepts_from_chunk(chunk)
+            for concept_data in extracted:
+                if len(saved_concepts) >= 15:
+                    break
+
+                concept_doc = {
+                    "study_pack_id": pack_id,
+                    "title": concept_data.get("concept_title", concept_data.get("title", "Unknown")),
+                    "short_definition": concept_data.get("short_definition", ""),
+                    "common_mistake": concept_data.get("common_mistake", ""),
+                    "exam_weight": 1.0,
+                    "exam_weight_label": "medium",
+                    "prerequisite_concepts": concept_data.get("prerequisite_concepts", []),
+                    "created_at": datetime.now(timezone.utc),
+                }
+                c_result = await concepts_col.insert_one(concept_doc)
+                concept_id = str(c_result.inserted_id)
+
+                raw_checks = await generate_checks_for_concept(concept_data)
+                if raw_checks:
+                    approved_checks = await quality_filter_checks(raw_checks)
+                    for chk in approved_checks:
+                        await checks_col.insert_one({
+                            "concept_id": concept_id,
+                            "type": chk.get("type", "recall"),
+                            "prompt": chk.get("prompt", ""),
+                            "expected_answer": chk.get("expected_answer", ""),
+                            "explanation": chk.get("short_explanation", chk.get("explanation", "")),
+                            "difficulty_hint": "medium",
+                        })
+
+                concept_doc["id"] = concept_id
+                concept_doc.pop("_id", None)
+                concept_doc["created_at"] = concept_doc["created_at"].isoformat()
+                saved_concepts.append(concept_doc)
+
+            if len(saved_concepts) >= 15:
+                break
+
+        total_concepts = await concepts_col.count_documents({"study_pack_id": pack_id})
+        await packs_col.update_one(
+            {"_id": ObjectId(pack_id)},
+            {"$set": {"concept_count": total_concepts}}
+        )
+
+        if not saved_concepts:
+            await jobs_col.update_one(
+                {"_id": ObjectId(job_id)},
+                {"$set": {"status": "failed", "error": "No concepts could be extracted. Try more detailed content."}}
+            )
+        else:
+            await jobs_col.update_one(
+                {"_id": ObjectId(job_id)},
+                {"$set": {
+                    "status": "complete",
+                    "completed_at": datetime.now(timezone.utc),
+                    "concepts_extracted": len(saved_concepts),
+                    "chunks_processed": len(chunks),
+                    "concepts": saved_concepts,
+                }}
+            )
+    except Exception as e:
+        logger.error(f"AI pipeline failed for job {job_id}: {e}")
+        await jobs_col.update_one(
+            {"_id": ObjectId(job_id)},
+            {"$set": {"status": "failed", "error": str(e)}}
+        )
+
+
 @app.post("/api/packs/{pack_id}/upload")
 async def upload_material(
+    background_tasks: BackgroundTasks,
     pack_id: str,
     file: Optional[UploadFile] = File(None),
     text: Optional[str] = Form(None),
@@ -536,68 +625,40 @@ async def upload_material(
     if not raw_text.strip():
         raise HTTPException(status_code=400, detail="No text content found")
 
-    chunks = chunk_text(raw_text)
-    if not chunks:
-        raise HTTPException(status_code=400, detail="Text too short to process")
-
-    saved_concepts = []
-    # Process up to 6 chunks for MVP (speed vs. depth balance)
-    for chunk in chunks[:6]:
-        extracted = await extract_concepts_from_chunk(chunk)
-        for concept_data in extracted:
-            if len(saved_concepts) >= 15:  # Cap at 15 concepts
-                break
-
-            concept_doc = {
-                "study_pack_id": pack_id,
-                "title": concept_data.get("concept_title", concept_data.get("title", "Unknown")),
-                "short_definition": concept_data.get("short_definition", ""),
-                "common_mistake": concept_data.get("common_mistake", ""),
-                "exam_weight": 1.0,
-                "exam_weight_label": "medium",
-                "prerequisite_concepts": concept_data.get("prerequisite_concepts", []),
-                "created_at": datetime.now(timezone.utc),
-            }
-            c_result = await concepts_col.insert_one(concept_doc)
-            concept_id = str(c_result.inserted_id)
-
-            # Generate checks
-            raw_checks = await generate_checks_for_concept(concept_data)
-            if raw_checks:
-                approved_checks = await quality_filter_checks(raw_checks)
-                for chk in approved_checks:
-                    await checks_col.insert_one({
-                        "concept_id": concept_id,
-                        "type": chk.get("type", "recall"),
-                        "prompt": chk.get("prompt", ""),
-                        "expected_answer": chk.get("expected_answer", ""),
-                        "explanation": chk.get("short_explanation", chk.get("explanation", "")),
-                        "difficulty_hint": "medium",
-                    })
-
-            concept_doc["id"] = concept_id
-            concept_doc.pop("_id", None)
-            concept_doc["created_at"] = concept_doc["created_at"].isoformat()
-            saved_concepts.append(concept_doc)
-
-        if len(saved_concepts) >= 15:
-            break
-
-    if not saved_concepts:
-        raise HTTPException(status_code=422, detail="No concepts could be extracted. Try more detailed content.")
-
-    # Update pack concept count
-    total_concepts = await concepts_col.count_documents({"study_pack_id": pack_id})
-    await packs_col.update_one(
-        {"_id": ObjectId(pack_id)},
-        {"$set": {"concept_count": total_concepts}}
-    )
-
-    return {
-        "concepts_extracted": len(saved_concepts),
-        "chunks_processed": len(chunks),
-        "concepts": saved_concepts,
+    # Create job document
+    job_doc = {
+        "pack_id": pack_id,
+        "user_id": str(user["_id"]),
+        "status": "queued",  # queued → processing → complete | failed
+        "created_at": datetime.now(timezone.utc),
+        "started_at": None,
+        "completed_at": None,
+        "concepts_extracted": 0,
+        "chunks_processed": 0,
+        "concepts": [],
+        "error": None,
     }
+    result = await jobs_col.insert_one(job_doc)
+    job_id = str(result.inserted_id)
+
+    # Run AI pipeline in background (non-blocking)
+    background_tasks.add_task(_run_ai_pipeline, job_id, pack_id, raw_text)
+
+    return {"job_id": job_id, "status": "queued"}
+
+
+@app.get("/api/jobs/{job_id}")
+async def get_job_status(job_id: str, user=Depends(get_current_user)):
+    try:
+        job = await jobs_col.find_one({
+            "_id": ObjectId(job_id),
+            "user_id": str(user["_id"]),
+        })
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid job ID")
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return doc_id(job)
 
 
 # ─── Concept Routes ───────────────────────────────────────────────────────────
