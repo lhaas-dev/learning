@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   X, ChevronRight, RotateCcw, Zap, CheckCircle2, AlertTriangle,
   Loader2, BookOpen, Brain, TrendingDown, Activity, Swords,
-  ChevronDown, ChevronUp, Check, XCircle
+  ChevronDown, ChevronUp, Check, XCircle, Eye
 } from 'lucide-react';
 import { answerSession, getSessionDebrief, startDrillSession, evaluateAnswer } from '../services/api';
 
