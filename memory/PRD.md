@@ -74,6 +74,7 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 - [x] GET /api/sessions/:id
 - [x] GET /api/sessions/:id/debrief (Claude, session-data-only, graceful fallback)
 - [x] POST /api/sessions/drill (5-min fix drill, recall+contrast only, max 2 concepts)
+- [x] POST /api/checks/evaluate (claim extraction + deterministic matching, never overrides user rating)
 - [x] GET /api/dashboard/overview (includes drill session labeling)
 - [x] AI Pipeline: concept extraction, check generation (4 types), quality filtering, micro-fix, session debrief
 - [x] RAG: source-only constraints, no hallucination, returns INSUFFICIENT_SOURCE_INFORMATION
