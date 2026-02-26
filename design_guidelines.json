@@ -1,0 +1,147 @@
+{
+  "identity": {
+    "name": "E1",
+    "mission": "Create a 'Tactical Minimal' Cyber Security learning environment that feels like a hacker's terminal but functions like a high-end learning tool.",
+    "core_principles": [
+      "Fusion over Imitation: Mix 'Swiss Style' precision with 'Cyberpunk' atmosphere.",
+      "Emotion First: The user should feel like an elite operator, not a student.",
+      "Content is King: Data and text legibility is paramount. Dark mode must not strain eyes.",
+      "Negative Space: Use deep black voids to separate data clusters.",
+      "Contrast: High-visibility neon accents against deep matte backgrounds."
+    ],
+    "anti_patterns": [
+      "No pure black (#000000) backgrounds without texture or tint.",
+      "No generic 'Inter' for headings. Use technical/display fonts.",
+      "No 'Bootstrap' grid layouts. Use bento/asymmetrical grids.",
+      "No soft, mushy shadows. Use sharp, technical borders and glows."
+    ]
+  },
+  "typography": {
+    "font_family": {
+      "headings": "\"Space Grotesk\", \"JetBrains Mono\", monospace",
+      "body": "\"Manrope\", sans-serif",
+      "code": "\"JetBrains Mono\", monospace"
+    },
+    "scale": {
+      "h1": "text-4xl md:text-6xl font-bold tracking-tight leading-none",
+      "h2": "text-3xl md:text-4xl font-semibold tracking-tight",
+      "h3": "text-2xl font-medium tracking-tight",
+      "body_lg": "text-lg leading-relaxed",
+      "body_base": "text-base leading-relaxed text-gray-300",
+      "caption": "text-xs font-mono uppercase tracking-widest text-gray-500"
+    }
+  },
+  "colors": {
+    "mode": "dark",
+    "palette": {
+      "background": {
+        "primary": "#050505",
+        "secondary": "#0A0A0A",
+        "tertiary": "#121212",
+        "surface": "#161b22"
+      },
+      "text": {
+        "primary": "#E6EDF3",
+        "secondary": "#8B949E",
+        "muted": "#484F58",
+        "accent": "#00E5FF"
+      },
+      "brand": {
+        "primary": "#00E5FF",
+        "secondary": "#2F81F7"
+      },
+      "risk": {
+        "high": "#FF2D55",
+        "medium": "#FFCC00",
+        "low": "#00C853"
+      },
+      "border": {
+        "subtle": "rgba(255, 255, 255, 0.1)",
+        "active": "rgba(0, 229, 255, 0.5)"
+      }
+    }
+  },
+  "layout_strategies": {
+    "dashboard": {
+      "name": "Command Center Grid",
+      "structure": "grid grid-cols-1 md:grid-cols-12 gap-6 p-6",
+      "items": {
+        "risk_overview": "col-span-full md:col-span-8 row-span-2 bg-surface border border-white/10 p-6 rounded-lg",
+        "weakest_concepts": "col-span-full md:col-span-4 row-span-2 bg-surface border border-white/10 p-6 rounded-lg",
+        "session_history": "col-span-full bg-surface border border-white/10 p-6 rounded-lg"
+      }
+    },
+    "auth_page": {
+      "name": "Split Terminal",
+      "structure": "flex h-screen w-full",
+      "left_panel": "hidden md:flex w-1/2 bg-black items-center justify-center relative overflow-hidden",
+      "right_panel": "w-full md:w-1/2 flex items-center justify-center bg-zinc-950 p-8"
+    }
+  },
+  "components": {
+    "cards": {
+      "style": "Glass Panel",
+      "classes": "bg-[#161b22]/80 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl hover:border-brand-primary/50 transition-colors duration-300",
+      "props": {
+        "data-testid": "card-component"
+      }
+    },
+    "buttons": {
+      "primary": {
+        "classes": "bg-[#00E5FF] text-black font-bold uppercase tracking-wider px-8 py-3 rounded-sm hover:bg-[#33EAFF] hover:shadow-[0_0_20px_rgba(0,229,255,0.4)] transition-all duration-200 clip-path-polygon-[0_0,100%_0,100%_80%,90%_100%,0_100%]",
+        "note": "Use a subtle clip-path or sharp edges for a tactical feel."
+      },
+      "secondary": {
+        "classes": "bg-transparent border border-white/20 text-white font-mono hover:bg-white/5 px-6 py-2 rounded-sm transition-colors"
+      }
+    },
+    "inputs": {
+      "style": "Terminal Input",
+      "classes": "bg-black/50 border-b border-white/20 focus:border-[#00E5FF] focus:ring-0 text-white placeholder-gray-600 px-4 py-3 font-mono transition-colors rounded-t-md"
+    },
+    "risk_badge": {
+      "high": "bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-1 rounded text-xs font-mono",
+      "medium": "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-2 py-1 rounded text-xs font-mono",
+      "low": "bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-1 rounded text-xs font-mono"
+    }
+  },
+  "visual_enhancers": {
+    "scanlines": "background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 229, 255, 0.03) 3px); pointer-events: none; position: fixed; inset: 0; z-index: 50;",
+    "glow_effects": "box-shadow: 0 0 15px rgba(0, 229, 255, 0.15);",
+    "glass_morphism": "backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);"
+  },
+  "images": {
+    "dashboard_bg": {
+      "url": "https://images.unsplash.com/photo-1664526936810-ec0856d31b92?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwzfHxjeWJlciUyMHNlY3VyaXR5JTIwYWJzdHJhY3QlMjBuZXR3b3JrJTIwbm9kZXMlMjBkYXJrJTIwYmx1ZXxlbnwwfHx8fDE3NzIxNDIzNTZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Abstract network nodes for dashboard background (low opacity overlay)",
+      "category": "background"
+    },
+    "hero_abstract": {
+      "url": "https://images.unsplash.com/photo-1605764949006-10d0e9e1437c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwxfHxkaWdpdGFsJTIwYnJhaW4lMjBjaXJjdWl0JTIwY29ubmVjdGlvbnMlMjBibHVlJTIwZ2xvd2luZ3xlbnwwfHx8fDE3NzIxNDIzNTh8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Digital brain abstract for 'Knowledge' concept",
+      "category": "hero"
+    },
+    "auth_side_image": {
+       "url": "https://images.unsplash.com/photo-1660836814985-8523a0d713b5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwxfHxjeWJlciUyMHNlY3VyaXR5JTIwYWJzdHJhY3QlMjBuZXR3b3JrJTIwbm9kZXMlMjBkYXJrJTIwYmx1ZXxlbnwwfHx8fDE3NzIxNDIzNTZ8MA&ixlib=rb-4.1.0&q=85",
+       "description": "Tech text/code overlay for auth page side panel",
+       "category": "auth"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Install 'lucide-react' for icons.",
+    "Install 'clsx' and 'tailwind-merge' for class handling.",
+    "Use 'framer-motion' for simple entrance animations (fade-in, slide-up).",
+    "Ensure all text is legible against the dark background. Increase contrast if needed.",
+    "Implement the 'Scanlines' visual enhancer as a global CSS class or component.",
+    "Use the 'Space Grotesk' font for headings if possible (via Google Fonts), otherwise fallback to standard sans but bold.",
+    "For the 'Risk Score', use a circular progress indicator or a 'Health Bar' style visual.",
+    "Use 'sonner' for toast notifications with a dark theme customization."
+  ],
+  "universal_guidelines": [
+    "Do not use gradients for text.",
+    "Do not use rounded-full buttons unless it's a specific 'pill' style tag.",
+    "Prefer sharp or slightly rounded (rounded-md, rounded-sm) corners for a 'tech' feel.",
+    "Always add hover states to interactive elements.",
+    "Use 'data-testid' for all interactive elements."
+  ]
+}
