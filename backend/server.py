@@ -641,6 +641,10 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
                             "expected_answer": chk.get("expected_answer", ""),
                             "explanation": chk.get("short_explanation", chk.get("explanation", "")),
                             "difficulty_hint": "medium",
+                            "answer_requirements": chk.get("answer_requirements", {
+                                "required_ideas": [],
+                                "wrong_statements": [],
+                            }),
                         })
 
                 concept_doc["id"] = concept_id
