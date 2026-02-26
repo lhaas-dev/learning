@@ -1,13 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Upload as UploadIcon, FileText, X, Check,
-  Loader2, AlertTriangle, ChevronRight, Trash2, BookOpen
+  Loader2, AlertTriangle, ChevronRight, Trash2, BookOpen, Clock
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { uploadMaterial, deleteConcept } from '../services/api';
+import { uploadMaterial, getJobStatus, deleteConcept } from '../services/api';
 
 function ConceptPreviewCard({ concept, onDelete }) {
   const [deleting, setDeleting] = useState(false);
