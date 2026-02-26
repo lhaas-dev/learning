@@ -104,6 +104,7 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 - [ ] Concept count sync (update when deleting from upload preview)
 
 ### P1 (Core UX)
+- [ ] Backfill `answer_requirements` for old Checks (admin endpoint to retroactively generate for checks created before evaluation feature)
 - [ ] PDF upload frontend testing (currently text-only tested)
 - [ ] Session resume (if user exits mid-session)
 - [ ] Exam date setting for risk urgency boost
