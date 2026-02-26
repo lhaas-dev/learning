@@ -394,6 +394,8 @@ export default function Session() {
       <SessionComplete
         stats={finalStats}
         packTitle={packTitle}
+        sessionId={sessionId}
+        navigate={navigate}
         onBack={() => navigate('/dashboard')}
       />
     );
