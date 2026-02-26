@@ -89,116 +89,93 @@ function CheckTypeBadge({ type }) {
   );
 }
 
-// ─── Evaluation result panel ──────────────────────────────────────────────────
-function EvaluationPanel({ evaluation, evaluating }) {
-  if (evaluating) {
-    return (
-      <div
-        className="flex items-center gap-2 text-xs text-text-muted font-mono py-2"
-        data-testid="evaluation-loading"
-      >
-        <Loader2 size={12} className="animate-spin text-brand-primary" />
-        <span>Analysing your answer...</span>
-      </div>
-    );
-  }
-  if (!evaluation) return null;
+// ─── Evaluation result panel (Blocks 2, 3, 4) ───────────────────────────────
+function EvaluationPanel({ evaluation, evaluating, hasAnswer, checkType }) {
+  // Scenario checks have open-ended answers — skip analysis to avoid false feedback
+  if (checkType === 'scenario') return null;
 
   const {
     result,
-    summary,
-    covered_ideas = [],
     missing_ideas = [],
     wrong_ideas_stated = [],
     extracted_claims = [],
-  } = evaluation;
+  } = evaluation || {};
 
-  if (result === 'no_answer' || result === 'no_requirements') {
-    return null; // No evaluation to show
-  }
-
-  const resultColors = {
-    correct: '#00C853',
-    partially_correct: '#FFCC00',
-    incorrect: '#FF2D55',
-  };
-  const summaryColor = resultColors[result] || '#8B949E';
+  const hasEvaluation = evaluation && result !== 'no_answer' && result !== 'no_requirements';
+  const allCovered = hasEvaluation && missing_ideas.length === 0 && wrong_ideas_stated.length === 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-3"
-      data-testid="evaluation-panel"
-    >
-      {/* Summary sentence */}
-      <p
-        className="text-xs font-mono font-semibold"
-        style={{ color: summaryColor }}
-        data-testid="evaluation-summary"
-      >
-        {summary}
-      </p>
+    <div className="space-y-3">
 
-      {/* Extracted claims — "We understood your answer as:" */}
-      {extracted_claims.length > 0 && (
-        <div data-testid="extracted-claims">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Eye size={10} className="text-text-muted flex-shrink-0" />
-            <span className="text-xs font-mono text-text-muted uppercase tracking-widest">
-              We understood your answer as
-            </span>
+      {/* Block 2: What we understood from your answer */}
+      <div className="glass-card p-4 border border-white/5" data-testid="block-understood">
+        <div className="text-xs font-mono text-text-muted uppercase tracking-widest mb-2.5">
+          What we understood from your answer
+        </div>
+        {evaluating ? (
+          <div className="flex items-center gap-2 text-xs text-text-muted font-mono" data-testid="evaluation-loading">
+            <Loader2 size={11} className="animate-spin text-brand-primary" />
+            <span>Analysing your answer...</span>
           </div>
-          <div className="space-y-1 pl-1 border-l border-white/10">
+        ) : hasAnswer && extracted_claims.length > 0 ? (
+          <ul className="space-y-1.5" data-testid="extracted-claims">
             {extracted_claims.map((claim, i) => (
-              <p key={i} className="text-xs text-text-secondary leading-relaxed" data-testid={`claim-${i}`}>
-                {claim}
-              </p>
+              <li key={i} className="text-xs text-text-secondary flex items-start gap-2" data-testid={`claim-${i}`}>
+                <span className="text-text-muted mt-0.5 flex-shrink-0 select-none">·</span>
+                <span>{claim}</span>
+              </li>
             ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-text-secondary font-mono" data-testid="no-claims">
+            No explicit statements detected in your answer.
+          </p>
+        )}
+      </div>
+
+      {/* Block 3: Missing or incorrect ideas — only when evaluation exists */}
+      {hasEvaluation && (
+        <div className="glass-card p-4 border border-white/5" data-testid="block-missing">
+          <div className="text-xs font-mono text-text-muted uppercase tracking-widest mb-2.5">
+            Missing or incorrect ideas
           </div>
-        </div>
-      )}
-
-      {/* Covered ideas */}
-      {covered_ideas.length > 0 && (
-        <div className="space-y-1" data-testid="covered-ideas">
-          {covered_ideas.map((idea, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs">
-              <Check size={11} className="text-risk-low flex-shrink-0 mt-0.5" />
-              <span className="text-text-secondary">{idea}</span>
+          {allCovered ? (
+            <div className="flex items-center gap-2" data-testid="all-covered">
+              <Check size={11} className="text-risk-low flex-shrink-0" />
+              <span className="text-xs text-text-secondary">All required core ideas were addressed.</span>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Missing ideas */}
-      {missing_ideas.length > 0 && (
-        <div className="space-y-1" data-testid="missing-ideas">
-          {missing_ideas.map((idea, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs">
-              <XCircle size={11} className="text-risk-high flex-shrink-0 mt-0.5" />
-              <span className="text-text-secondary">
-                <span className="text-risk-high/70">Missing: </span>{idea}
-              </span>
+          ) : missing_ideas.length > 0 ? (
+            <div data-testid="missing-ideas">
+              <p className="text-xs text-text-muted mb-2">Missing key ideas for this question:</p>
+              <ul className="space-y-1.5">
+                {missing_ideas.map((idea, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs">
+                    <XCircle size={11} className="text-risk-high flex-shrink-0 mt-0.5" />
+                    <span className="text-text-secondary">{idea}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-          ))}
+          ) : null}
         </div>
       )}
 
-      {/* Wrong statements */}
-      {wrong_ideas_stated.length > 0 && (
-        <div className="space-y-1" data-testid="wrong-statements">
+      {/* Block 4: Incorrect assumptions — only when detected */}
+      {hasEvaluation && wrong_ideas_stated.length > 0 && (
+        <div className="glass-card p-4 border border-risk-high/15" data-testid="wrong-statements">
+          <div className="text-xs font-mono text-text-muted uppercase tracking-widest mb-2.5">
+            Incorrect assumption detected
+          </div>
           {wrong_ideas_stated.map((idea, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs">
-              <XCircle size={11} className="text-risk-high flex-shrink-0 mt-0.5" />
-              <span className="text-text-secondary">
-                <span className="text-risk-high/70">Incorrect assumption: </span>{idea}
-              </span>
+            <div key={i} className="space-y-1">
+              <p className="text-xs text-text-primary">"{idea}"</p>
+              <p className="text-xs text-text-muted font-mono">This assumption commonly causes exam mistakes.</p>
             </div>
           ))}
         </div>
       )}
-    </motion.div>
+
+    </div>
   );
 }
 
