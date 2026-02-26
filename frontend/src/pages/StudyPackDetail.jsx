@@ -163,9 +163,9 @@ function ConceptCard({ concept, onUpdate, onDelete }) {
       ) : (
         <>
           <div className="flex items-start justify-between gap-3 mb-2">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               <h4 className="font-heading text-sm font-semibold text-text-primary">{concept.title}</h4>
-              <RiskBadge value={concept.risk} />
+              <RiskLabel value={concept.risk} />
             </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
               <ExamWeightSelect value={weight} onChange={handleWeightChange} />
@@ -186,13 +186,29 @@ function ConceptCard({ concept, onUpdate, onDelete }) {
               </button>
             </div>
           </div>
-          <p className="text-sm text-text-secondary mb-2 leading-relaxed">{concept.short_definition}</p>
-          {concept.common_mistake && (
-            <div className="flex items-start gap-2 bg-risk-high/5 border border-risk-high/10 rounded p-2 mt-2">
-              <AlertTriangle size={11} className="text-risk-high flex-shrink-0 mt-0.5" />
-              <span className="text-xs text-risk-high/80">{concept.common_mistake}</span>
-            </div>
-          )}
+
+          <p className="text-sm text-text-secondary mb-3 leading-relaxed">{concept.short_definition}</p>
+
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Action hint */}
+            {(() => {
+              const hint = getActionHint(concept);
+              const HintIcon = hint.icon;
+              return (
+                <span className="flex items-center gap-1.5 text-xs font-mono" style={{ color: hint.color }}>
+                  <HintIcon size={11} />
+                  {hint.label}
+                </span>
+              );
+            })()}
+
+            {concept.common_mistake && (
+              <div className="flex items-start gap-1.5 bg-risk-high/5 border border-risk-high/10 rounded px-2 py-1 max-w-xs">
+                <AlertTriangle size={10} className="text-risk-high flex-shrink-0 mt-0.5" />
+                <span className="text-xs text-risk-high/80 leading-tight">{concept.common_mistake}</span>
+              </div>
+            )}
+          </div>
         </>
       )}
     </motion.div>
