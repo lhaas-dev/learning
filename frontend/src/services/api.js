@@ -31,8 +31,9 @@ export const getPack = (id) => api.get(`/api/packs/${id}`);
 export const uploadMaterial = (packId, formData) =>
   api.post(`/api/packs/${packId}/upload`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 120000, // 2 min timeout for AI processing
   });
+
+export const getJobStatus = (jobId) => api.get(`/api/jobs/${jobId}`);
 
 // Concepts
 export const listConcepts = (packId) => api.get(`/api/packs/${packId}/concepts`);
