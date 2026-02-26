@@ -4,9 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   X, ChevronRight, RotateCcw, Zap, CheckCircle2, AlertTriangle,
-  Loader2, BookOpen, Brain
+  Loader2, BookOpen, Brain, TrendingDown, Activity, Swords
 } from 'lucide-react';
-import { answerSession } from '../services/api';
+import { answerSession, getSessionDebrief, startDrillSession } from '../services/api';
 
 const RATING_CONFIG = {
   again: {
