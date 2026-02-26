@@ -129,6 +129,50 @@ class TestEvaluateEndpoint:
         assert len(data['missing_ideas']) > 0, "Bad answer should have missing_ideas"
         print(f"  Result: {data['result']}, missing: {data['missing_ideas']}")
 
+    def test_evaluation_returns_extracted_claims(self, auth_headers, check_with_requirements):
+        """Evaluation with requirements returns extracted_claims list"""
+        required_ideas = check_with_requirements['answer_requirements']['required_ideas']
+        good_answer = ". ".join(required_ideas)
+        res = requests.post(f"{BASE_URL}/api/checks/evaluate", json={
+            "check_id": check_with_requirements['id'],
+            "user_answer": good_answer
+        }, headers=auth_headers, timeout=30)
+        assert res.status_code == 200
+        data = res.json()
+        assert 'extracted_claims' in data, "Response must include extracted_claims"
+        assert isinstance(data['extracted_claims'], list), "extracted_claims must be a list"
+        print(f"  extracted_claims count: {len(data['extracted_claims'])}")
+        print(f"  extracted_claims: {data['extracted_claims']}")
+
+    def test_no_answer_does_not_include_extracted_claims(self, auth_headers, check_without_requirements):
+        """Empty answer (no_answer result) should not crash — extracted_claims may be absent"""
+        res = requests.post(f"{BASE_URL}/api/checks/evaluate", json={
+            "check_id": check_without_requirements['id'],
+            "user_answer": ""
+        }, headers=auth_headers)
+        assert res.status_code == 200
+        data = res.json()
+        assert data['result'] == 'no_answer'
+        # extracted_claims may or may not be present; frontend defaults to []
+        # If present, must be list
+        if 'extracted_claims' in data:
+            assert isinstance(data['extracted_claims'], list)
+
+    def test_extracted_claims_is_populated_for_detailed_answer(self, auth_headers, check_with_requirements):
+        """A substantive answer to a check with requirements populates extracted_claims"""
+        required_ideas = check_with_requirements['answer_requirements']['required_ideas']
+        detailed_answer = f"In my answer: {'. '.join(required_ideas)}"
+        res = requests.post(f"{BASE_URL}/api/checks/evaluate", json={
+            "check_id": check_with_requirements['id'],
+            "user_answer": detailed_answer
+        }, headers=auth_headers, timeout=30)
+        assert res.status_code == 200
+        data = res.json()
+        assert 'extracted_claims' in data
+        # A detailed answer should produce at least one extracted claim
+        assert len(data['extracted_claims']) >= 1, f"Expected claims, got: {data['extracted_claims']}"
+        print(f"  Claims extracted: {data['extracted_claims']}")
+
 
 class TestNewCheckSchema:
 
