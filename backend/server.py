@@ -1414,6 +1414,9 @@ async def evaluate_answer(req: EvaluateAnswerRequest, user=Depends(get_current_u
         raise HTTPException(status_code=404, detail="Check not found")
 
     requirements = check.get("answer_requirements", {})
+    # Defensive: LLM may occasionally return a list instead of dict for this field
+    if not isinstance(requirements, dict):
+        requirements = {}
     required_ideas = requirements.get("required_ideas", [])
     wrong_statements = requirements.get("wrong_statements", [])
 
