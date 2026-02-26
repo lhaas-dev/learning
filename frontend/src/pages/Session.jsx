@@ -18,7 +18,7 @@ const RATING_CONFIG = {
     border: 'rgba(255,45,85,0.3)',
     icon: RotateCcw,
     emphasis: false,
-    riskMsg: "Prioritized — this gap causes frequent exam errors.",
+    riskMsg: "High exam risk detected. This concept will be prioritized.",
   },
   hard: {
     label: 'Partially knew',
@@ -27,7 +27,7 @@ const RATING_CONFIG = {
     border: 'rgba(255,204,0,0.35)',
     icon: AlertTriangle,
     emphasis: true, // slight visual emphasis — middle option
-    riskMsg: "This concept stays in rotation — key ideas still hazy.",
+    riskMsg: "High exam risk detected. This concept will be prioritized.",
   },
   good: {
     label: 'Knew it',
@@ -36,7 +36,7 @@ const RATING_CONFIG = {
     border: 'rgba(47,129,247,0.35)',
     icon: CheckCircle2,
     emphasis: true, // slight visual emphasis — middle option
-    riskMsg: "Solid. Risk reduced — concept deprioritized until it fades.",
+    riskMsg: "Low risk detected. This concept will be deprioritized.",
   },
   easy: {
     label: 'Instant recall',
@@ -45,7 +45,7 @@ const RATING_CONFIG = {
     border: 'rgba(0,200,83,0.3)',
     icon: Zap,
     emphasis: false,
-    riskMsg: "Low risk detected. Interval extended significantly.",
+    riskMsg: "Low risk detected. This concept will be deprioritized.",
   },
 };
 
