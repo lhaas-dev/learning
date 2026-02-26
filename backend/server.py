@@ -962,9 +962,11 @@ async def answer_session(req: AnswerRequest, user=Depends(get_current_user)):
     # Log review event
     await review_col.insert_one({
         "user_id": user_id,
+        "session_id": req.session_id,
         "concept_id": req.concept_id,
         "check_id": req.check_id,
         "rating": req.rating,
+        "user_answer": req.user_answer,
         "response_time": 0,
         "created_at": datetime.now(timezone.utc),
     })
