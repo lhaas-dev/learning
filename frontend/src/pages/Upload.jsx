@@ -63,8 +63,51 @@ export default function Upload() {
   const [text, setText] = useState('');
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null); // extracted concepts
+  const [jobId, setJobId] = useState(null);
+  const [jobStatus, setJobStatus] = useState(null); // 'queued' | 'processing' | 'complete' | 'failed'
+  const [result, setResult] = useState(null);
+  const [elapsed, setElapsed] = useState(0);
   const fileInputRef = useRef(null);
+  const pollRef = useRef(null);
+  const elapsedRef = useRef(null);
+
+  // Polling logic
+  const startPolling = useCallback((jid) => {
+    setElapsed(0);
+    elapsedRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await getJobStatus(jid);
+        const job = res.data;
+        setJobStatus(job.status);
+
+        if (job.status === 'complete') {
+          clearInterval(pollRef.current);
+          clearInterval(elapsedRef.current);
+          setResult(job);
+          setLoading(false);
+          toast.success(`Extracted ${job.concepts_extracted} concepts!`);
+        } else if (job.status === 'failed') {
+          clearInterval(pollRef.current);
+          clearInterval(elapsedRef.current);
+          setLoading(false);
+          setJobId(null);
+          setJobStatus(null);
+          toast.error(job.error || 'Processing failed. Try different content.');
+        }
+      } catch {
+        // Polling error - keep trying
+      }
+    }, 4000); // Poll every 4s
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+    };
+  }, []);
 
   const handleProcess = async () => {
     if (mode === 'text' && !text.trim()) {
@@ -77,6 +120,9 @@ export default function Upload() {
     }
 
     setLoading(true);
+    setJobId(null);
+    setJobStatus(null);
+
     try {
       const formData = new FormData();
       if (mode === 'file') {
@@ -85,14 +131,15 @@ export default function Upload() {
         formData.append('text', text);
       }
 
-      toast.info('Processing material... this may take 30-60 seconds');
       const res = await uploadMaterial(packId, formData);
-      setResult(res.data);
-      toast.success(`Extracted ${res.data.concepts_extracted} concepts!`);
+      const jid = res.data.job_id;
+      setJobId(jid);
+      setJobStatus('queued');
+      toast.info('Material queued — AI is extracting concepts...');
+      startPolling(jid);
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Processing failed. Try different content.';
+      const msg = err.response?.data?.detail || 'Upload failed.';
       toast.error(msg);
-    } finally {
       setLoading(false);
     }
   };
