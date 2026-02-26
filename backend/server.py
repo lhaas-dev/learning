@@ -435,62 +435,120 @@ Return ONLY valid JSON:
         return {"top_gaps": gaps, "pattern": None}
 
 
-async def extract_claims_and_match_requirements(
-    user_answer: str,
+async def _extract_claims(question: str, expected_answer: str, user_answer: str) -> list:
+    """
+    Step 1 of answer evaluation.
+    Extracts ONLY explicit claims from the student's answer.
+    Uses verbatim prompt per ANSWER_CLAIM_EXTRACTION prompt spec.
+    The model is strictly forbidden from judging correctness or adding information.
+    Output: {"claims": [...]} — no other fields allowed.
+    """
+    system = (
+        "You are a neutral text analysis assistant.\n"
+        "Your task is to extract explicit factual claims from a student's answer exactly as written.\n"
+        "You are NOT a grader.\n"
+        "You are NOT a teacher.\n"
+        "You are NOT allowed to correct or improve the answer."
+    )
+    prompt = f"""INSTRUCTIONS (STRICT):
+Extract ONLY statements that are explicitly present in the student's answer.
+Do NOT infer unstated meaning.
+Do NOT judge correctness.
+Do NOT add missing information.
+Do NOT rephrase or improve the wording.
+Do NOT reference external knowledge.
+If the answer contains no clear claims, return an empty list.
+If the answer is vague, extract the vague claim as written.
+You must remain conservative.
+If something is unclear, do NOT guess.
+
+OUTPUT FORMAT (REQUIRED):
+Return a JSON object with ONLY this structure:
+{{"claims": ["claim 1", "claim 2"]}}
+No additional fields are allowed.
+
+---
+
+Question:
+{question}
+
+Expected core answer (for context only — do NOT use this to fill in missing claims):
+{expected_answer}
+
+Student's answer:
+{user_answer}"""
+
+    try:
+        response = await call_claude(system, prompt)
+        result = extract_json(response)
+        claims = result.get("claims", [])
+        # Strict: only accept a list of strings, reject any extra fields
+        if not isinstance(claims, list):
+            return []
+        return [str(c) for c in claims if c]
+    except Exception as e:
+        logger.warning(f"Claim extraction failed: {e}")
+        return []
+
+
+async def _match_claims_to_requirements(
+    claims: list,
     required_ideas: list,
     wrong_statements: list,
 ) -> dict:
     """
-    Step 1: Extract explicit claims from user answer (LLM used as structured parser only).
-    Step 2: Deterministic match against stored answer requirements.
-    The model MUST NOT judge correctness — it only identifies what was stated.
+    Step 2 of answer evaluation — deterministic requirement matching.
+    Given the extracted claims, checks which required ideas are covered
+    and whether any wrong statements were made.
+    Binary YES/NO per requirement — not an overall judgment.
     """
+    if not claims:
+        return {
+            "covered_ideas": [],
+            "missing_ideas": required_ideas,
+            "wrong_ideas_stated": [],
+        }
+
     system = (
-        "You are performing a mechanical claim-extraction and requirement-matching task. "
-        "You do NOT judge whether an answer is good or bad. "
-        "You ONLY extract what was explicitly stated and match it against the given requirements. "
-        "Do not add, infer, explain, or paraphrase beyond what was explicitly written."
+        "You are performing a mechanical requirement-matching task. "
+        "You are given a list of extracted claims and a list of requirements. "
+        "For each requirement, determine if any claim in the list covers it semantically. "
+        "You are NOT judging the quality of the answer overall. "
+        "You are ONLY checking if specific ideas are present or absent. "
+        "Return binary results only — no explanations, no scores."
     )
-    prompt = f"""Perform this mechanical task on the student's answer.
+    prompt = f"""Given these extracted claims and requirements, perform binary matching.
 
-Student's answer:
-\"\"\"{user_answer}\"\"\"
+Extracted claims (what the student explicitly stated):
+{json.dumps(claims)}
 
-Required core ideas (ideas that should be present in a correct answer):
+Required ideas (must be present for a correct answer):
 {json.dumps(required_ideas)}
 
-Explicitly wrong statements (ideas that must NOT appear):
+Wrong statements to detect (must NOT appear in a correct answer):
 {json.dumps(wrong_statements)}
 
-Step 1: Extract all distinct claims from the student's answer as short phrases.
-Only extract what was explicitly stated. Do not infer, add, or rephrase.
-If the answer is empty or too vague, return an empty list.
-
-Step 2: For each required idea, check if any extracted claim covers it — semantically, not just literally.
-
-Step 3: For each wrong statement, check if any extracted claim is equivalent to it.
+For each required idea: is any claim semantically covering it? (semantically, not just literally)
+For each wrong statement: does any claim express this incorrect idea?
 
 Return ONLY valid JSON:
 {{
-  "extracted_claims": ["claim 1", "claim 2"],
-  "covered_ideas": ["ideas from the required list that were covered"],
-  "missing_ideas": ["ideas from the required list that were NOT covered"],
-  "wrong_ideas_stated": ["wrong statements from the list that appeared in the answer"]
+  "covered_ideas": ["required ideas that were covered by at least one claim"],
+  "missing_ideas": ["required ideas that were NOT covered by any claim"],
+  "wrong_ideas_stated": ["wrong statements that appeared in the claims"]
 }}"""
 
     try:
         response = await call_claude(system, prompt)
         result = extract_json(response)
         return {
-            "extracted_claims": result.get("extracted_claims", []),
             "covered_ideas": result.get("covered_ideas", []),
             "missing_ideas": result.get("missing_ideas", required_ideas),
             "wrong_ideas_stated": result.get("wrong_ideas_stated", []),
         }
     except Exception as e:
-        logger.warning(f"Claim extraction failed: {e}")
+        logger.warning(f"Requirement matching failed: {e}")
         return {
-            "extracted_claims": [],
             "covered_ideas": [],
             "missing_ideas": required_ideas,
             "wrong_ideas_stated": [],
