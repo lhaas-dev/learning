@@ -5,8 +5,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Upload as UploadIcon, FileText, X, Check,
   Loader2, AlertTriangle, ChevronRight, Trash2, BookOpen, Clock
-} from 'lucide-react';
-import Navbar from '../components/Navbar';
+} from 'lucide-react';import Navbar from '../components/Navbar';
 import { uploadMaterial, getJobStatus, deleteConcept } from '../services/api';
 
 function ConceptPreviewCard({ concept, onDelete }) {
