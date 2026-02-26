@@ -335,6 +335,7 @@ export default function Upload() {
         ) : (
           /* Result preview */
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+            {/* Stats bar */}
             <div className="glass-card p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Check size={16} className="text-risk-low" />
@@ -356,6 +357,42 @@ export default function Upload() {
               </button>
             </div>
 
+            {/* ── Post-Upload Risk Summary ── */}
+            {result.risk_summary?.length > 0 && (
+              <div className="glass-card p-5 border border-risk-high/15" data-testid="risk-summary-panel">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle size={13} className="text-risk-high" />
+                  <span className="text-xs font-mono text-text-muted uppercase tracking-widest">
+                    Top Detected Risks
+                  </span>
+                  <span className="text-xs text-text-muted ml-auto font-mono">
+                    from your material
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {result.risk_summary.map((item, i) => (
+                    <div
+                      key={i}
+                      className="border-l-2 border-risk-high/30 pl-3"
+                      data-testid={`risk-summary-item-${i}`}
+                    >
+                      <div className="text-xs font-mono font-semibold text-text-primary mb-0.5">
+                        {item.concept}
+                      </div>
+                      <div className="text-xs text-risk-high/70 leading-snug">
+                        {item.misconception}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-text-muted font-mono mt-3 border-t border-white/5 pt-3">
+                  These are the most common misconceptions identified in your material.
+                  Focus on these first during your session.
+                </p>
+              </div>
+            )}
+
+            {/* Concept review list */}
             <div className="space-y-2">
               <p className="text-xs font-mono text-text-muted uppercase tracking-widest">
                 Review Concepts ({result.concepts?.length || 0})
