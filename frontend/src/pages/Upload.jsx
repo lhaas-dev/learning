@@ -299,7 +299,7 @@ export default function Upload() {
               {loading ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  Extracting Concepts...
+                  {jobStatus === 'queued' ? 'Queued...' : `Processing... ${elapsed}s`}
                 </>
               ) : (
                 <>
@@ -308,6 +308,29 @@ export default function Upload() {
                 </>
               )}
             </button>
+
+            {loading && (
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-2 text-xs text-text-muted font-mono">
+                  <Clock size={11} />
+                  <span>AI is reading your material — typically 30–90 seconds</span>
+                </div>
+                <div className="mt-2 flex justify-center gap-1">
+                  {['Chunking text', 'Extracting concepts', 'Generating checks', 'Quality filtering'].map((step, i) => (
+                    <span
+                      key={step}
+                      className={`text-xs px-2 py-0.5 rounded font-mono ${
+                        elapsed > i * 15
+                          ? 'text-brand-primary bg-brand-primary/10'
+                          : 'text-text-muted bg-white/5'
+                      }`}
+                    >
+                      {step}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </motion.div>
         ) : (
           /* Result preview */
