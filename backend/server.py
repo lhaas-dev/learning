@@ -435,6 +435,68 @@ Return ONLY valid JSON:
         return {"top_gaps": gaps, "pattern": None}
 
 
+async def extract_claims_and_match_requirements(
+    user_answer: str,
+    required_ideas: list,
+    wrong_statements: list,
+) -> dict:
+    """
+    Step 1: Extract explicit claims from user answer (LLM used as structured parser only).
+    Step 2: Deterministic match against stored answer requirements.
+    The model MUST NOT judge correctness — it only identifies what was stated.
+    """
+    system = (
+        "You are performing a mechanical claim-extraction and requirement-matching task. "
+        "You do NOT judge whether an answer is good or bad. "
+        "You ONLY extract what was explicitly stated and match it against the given requirements. "
+        "Do not add, infer, explain, or paraphrase beyond what was explicitly written."
+    )
+    prompt = f"""Perform this mechanical task on the student's answer.
+
+Student's answer:
+\"\"\"{user_answer}\"\"\"
+
+Required core ideas (ideas that should be present in a correct answer):
+{json.dumps(required_ideas)}
+
+Explicitly wrong statements (ideas that must NOT appear):
+{json.dumps(wrong_statements)}
+
+Step 1: Extract all distinct claims from the student's answer as short phrases.
+Only extract what was explicitly stated. Do not infer, add, or rephrase.
+If the answer is empty or too vague, return an empty list.
+
+Step 2: For each required idea, check if any extracted claim covers it — semantically, not just literally.
+
+Step 3: For each wrong statement, check if any extracted claim is equivalent to it.
+
+Return ONLY valid JSON:
+{{
+  "extracted_claims": ["claim 1", "claim 2"],
+  "covered_ideas": ["ideas from the required list that were covered"],
+  "missing_ideas": ["ideas from the required list that were NOT covered"],
+  "wrong_ideas_stated": ["wrong statements from the list that appeared in the answer"]
+}}"""
+
+    try:
+        response = await call_claude(system, prompt)
+        result = extract_json(response)
+        return {
+            "extracted_claims": result.get("extracted_claims", []),
+            "covered_ideas": result.get("covered_ideas", []),
+            "missing_ideas": result.get("missing_ideas", required_ideas),
+            "wrong_ideas_stated": result.get("wrong_ideas_stated", []),
+        }
+    except Exception as e:
+        logger.warning(f"Claim extraction failed: {e}")
+        return {
+            "extracted_claims": [],
+            "covered_ideas": [],
+            "missing_ideas": required_ideas,
+            "wrong_ideas_stated": [],
+        }
+
+
 # ─── Risk & Session Engine ────────────────────────────────────────────────────
 EXAM_WEIGHT_MAP = {"low": 0.5, "medium": 1.0, "high": 1.5}
 SESSION_SIZES = {10: 8, 20: 15, 30: 22}
