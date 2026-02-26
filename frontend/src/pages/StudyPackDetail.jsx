@@ -10,11 +10,35 @@ import {
 import Navbar from '../components/Navbar';
 import { getPack, listConcepts, updateConcept, deleteConcept, startSession } from '../services/api';
 
-function RiskBadge({ value }) {
+function RiskLabel({ value }) {
   const pct = Math.round((value || 0) * 100);
-  if (pct > 70) return <span className="risk-badge-high">HIGH {pct}%</span>;
-  if (pct > 40) return <span className="risk-badge-medium">MED {pct}%</span>;
-  return <span className="risk-badge-low">LOW {pct}%</span>;
+  if (pct > 70) return (
+    <span className="flex items-center gap-1 text-xs font-mono text-risk-high">
+      <AlertTriangle size={11} /> High risk
+    </span>
+  );
+  if (pct > 40) return (
+    <span className="flex items-center gap-1 text-xs font-mono text-risk-medium">
+      <AlertCircle size={11} /> Medium risk
+    </span>
+  );
+  return (
+    <span className="flex items-center gap-1 text-xs font-mono text-risk-low">
+      <CheckCircle size={11} /> Low risk
+    </span>
+  );
+}
+
+function getActionHint(concept) {
+  const mistake = (concept.common_mistake || '').toLowerCase();
+  const weight = concept.exam_weight_label || concept.exam_weight;
+  if (mistake.includes('confus') || mistake.includes('mix')) {
+    return { label: 'Often confused', icon: GitBranch, color: '#FFCC00' };
+  }
+  if (weight === 'high' || concept.exam_weight >= 1.5) {
+    return { label: 'Frequently tested', icon: Flame, color: '#FF2D55' };
+  }
+  return { label: 'Common exam mistake', icon: Target, color: '#8B949E' };
 }
 
 function ExamWeightSelect({ value, onChange }) {
