@@ -288,7 +288,12 @@ export default function Dashboard() {
                         className="flex items-center justify-between p-3 rounded-md bg-black/30 border border-white/5"
                       >
                         <div>
-                          <div className="text-sm text-text-primary">{s.pack_title}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm text-text-primary">{s.pack_title}</div>
+                            {s.is_drill && (
+                              <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-risk-high/10 text-risk-high border border-risk-high/20">DRILL</span>
+                            )}
+                          </div>
                           <div className="text-xs font-mono text-text-muted mt-0.5">
                             {s.duration_minutes}min · {total} items
                           </div>
