@@ -1,0 +1,187 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #050505;
+    color: #E6EDF3;
+    font-family: 'Manrope', sans-serif;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', 'JetBrains Mono', monospace;
+  }
+
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0A0A0A;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+}
+
+@layer components {
+  .scanlines {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 229, 255, 0.015) 3px
+    );
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+  }
+
+  .glass-card {
+    background: rgba(22, 27, 34, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+  }
+
+  .glass-card:hover {
+    border-color: rgba(0, 229, 255, 0.2);
+    transition: border-color 0.3s ease;
+  }
+
+  .btn-primary {
+    background: #00E5FF;
+    color: #000;
+    font-weight: 700;
+    font-family: 'Space Grotesk', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 10px 24px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-primary:hover {
+    background: #33EAFF;
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.35);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: #E6EDF3;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .terminal-input {
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px 6px 0 0;
+    color: #E6EDF3;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 12px 16px;
+    width: 100%;
+    transition: border-color 0.2s ease;
+    outline: none;
+  }
+
+  .terminal-input::placeholder {
+    color: #484F58;
+  }
+
+  .terminal-input:focus {
+    border-bottom-color: #00E5FF;
+    background: rgba(0, 229, 255, 0.03);
+  }
+
+  .risk-badge-high {
+    background: rgba(255, 45, 85, 0.1);
+    color: #FF2D55;
+    border: 1px solid rgba(255, 45, 85, 0.2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .risk-badge-medium {
+    background: rgba(255, 204, 0, 0.1);
+    color: #FFCC00;
+    border: 1px solid rgba(255, 204, 0, 0.2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .risk-badge-low {
+    background: rgba(0, 200, 83, 0.1);
+    color: #00C853;
+    border: 1px solid rgba(0, 200, 83, 0.2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .glow-text {
+    color: #00E5FF;
+    text-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+  }
+}
