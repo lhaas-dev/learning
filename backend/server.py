@@ -1328,3 +1328,75 @@ async def dashboard_overview(user=Depends(get_current_user)):
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+# ─── Answer Evaluation Route ──────────────────────────────────────────────────
+@app.post("/api/checks/evaluate")
+async def evaluate_answer(req: EvaluateAnswerRequest, user=Depends(get_current_user)):
+    """
+    Conservative answer evaluation — assisted self-assessment only.
+    Step 1: Extract explicit claims via LLM (no judgment allowed).
+    Step 2: Deterministic matching against stored answer_requirements.
+    Never overrides user's self-rating.
+    """
+    if not req.user_answer.strip():
+        return {
+            "result": "no_answer",
+            "summary": "No answer written — compare with the correct answer above.",
+            "covered_ideas": [],
+            "missing_ideas": [],
+            "wrong_ideas_stated": [],
+        }
+
+    try:
+        check = await checks_col.find_one({"_id": ObjectId(req.check_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid check ID")
+    if not check:
+        raise HTTPException(status_code=404, detail="Check not found")
+
+    requirements = check.get("answer_requirements", {})
+    required_ideas = requirements.get("required_ideas", [])
+    wrong_statements = requirements.get("wrong_statements", [])
+
+    # No requirements stored (older check without requirements field)
+    if not required_ideas:
+        return {
+            "result": "no_requirements",
+            "summary": "Compare your answer with the correct answer above.",
+            "covered_ideas": [],
+            "missing_ideas": [],
+            "wrong_ideas_stated": [],
+        }
+
+    # Run claim extraction + deterministic matching
+    match_result = await extract_claims_and_match_requirements(
+        req.user_answer, required_ideas, wrong_statements
+    )
+
+    covered = match_result["covered_ideas"]
+    missing = match_result["missing_ideas"]
+    wrong_stated = match_result["wrong_ideas_stated"]
+
+    # Deterministic result classification — no LLM judgment
+    if wrong_stated:
+        result = "incorrect"
+        summary = f"Incorrect statement detected — key distinction missing."
+    elif len(missing) == 0:
+        result = "correct"
+        summary = "All key ideas covered."
+    elif len(covered) > 0:
+        result = "partially_correct"
+        n = len(missing)
+        summary = f"Partially correct — {n} key idea{'s' if n > 1 else ''} missing."
+    else:
+        result = "incorrect"
+        summary = "Key ideas not found in your answer."
+
+    return {
+        "result": result,
+        "summary": summary,
+        "covered_ideas": covered,
+        "missing_ideas": missing,
+        "wrong_ideas_stated": wrong_stated,
+    }
