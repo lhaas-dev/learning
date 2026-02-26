@@ -1209,15 +1209,19 @@ async def dashboard_overview(user=Depends(get_current_user)):
         {"user_id": user_id, "completed_at": {"$ne": None}}
     ).sort("started_at", -1).limit(10)
     async for s in cursor:
-        pack_obj = await packs_col.find_one({"_id": ObjectId(s["pack_id"])}) if s.get("pack_id") else None
+        pack_title = "5-Min Fix Drill" if s.get("is_drill") else "Unknown"
+        if not s.get("is_drill") and s.get("pack_id"):
+            pack_obj = await packs_col.find_one({"_id": ObjectId(s["pack_id"])})
+            pack_title = pack_obj.get("title", "Unknown") if pack_obj else "Unknown"
         started = s.get("started_at")
         completed = s.get("completed_at")
         sessions_list.append({
             "id": str(s["_id"]),
-            "pack_title": pack_obj.get("title", "Unknown") if pack_obj else "Unknown",
+            "pack_title": pack_title,
             "duration_minutes": s.get("duration_minutes", 0),
             "total": s.get("total", 0),
             "stats": s.get("stats", {}),
+            "is_drill": s.get("is_drill", False),
             "started_at": started.isoformat() if isinstance(started, datetime) else started,
             "completed_at": completed.isoformat() if isinstance(completed, datetime) else completed,
         })
