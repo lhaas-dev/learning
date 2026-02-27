@@ -88,11 +88,14 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 - [x] Session page (question reveal, rating buttons, micro-fix panel)
 - [x] Session Debrief screen (Top Knowledge Risks, Dominant Pattern, 5-Min Fix Drill CTA)
 - [x] Drill session flow (navigates to active session targeting weak concepts)
-- [x] EvaluationPanel — full assisted self-assessment UI:
-  - "We understood your answer as:" (extracted_claims) — NEW (Feb 2026)
-  - Covered ideas (green check), Missing ideas (red X), Incorrect assumptions (red X)
-  - Color-coded summary (correct/partially_correct/incorrect)
-  - Loading spinner during AI evaluation
+- [x] EvaluationPanel — full assisted self-assessment UI per spec (Feb 2026):
+  - Block 1: "Correct answer (core idea)" — bold core answer + collapsible explanation
+  - Block 2: "What we understood from your answer" — extracted_claims bullet list, always visible for non-scenario
+  - Block 3: "Missing or incorrect ideas" — "Missing key ideas:" list or "All required core ideas were addressed."
+  - Block 4: "Incorrect assumption detected" — quoted wrong statement + "This assumption commonly causes exam mistakes."
+  - Scenario checks skip blocks 2/3/4 (open-ended, no false analysis)
+  - Rating buttons: Didn't know / Partially knew / Knew it / Instant recall
+  - System risk feedback: "High exam risk detected." / "Low risk detected." (plain text, no animation)
 
 ---
 
