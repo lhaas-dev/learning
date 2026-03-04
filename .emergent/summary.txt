@@ -1,0 +1,174 @@
+<analysis>**original_problem_statement:**
+You are acting as a senior software engineer, product architect, and execution-focused builder.
+
+Your task is to IMPLEMENT A WORKING MVP based STRICTLY AND ONLY on the Markdown documents from the GitHub repository: https://github.com/lhaas-dev/learning.git
+
+**PRODUCT REQUIREMENTS:**
+- The Markdown files from the repository are the ONLY source of requirements.
+- Implement ONLY Phase 1 / MVP functionality.
+- Follow the architecture specified: FastAPI backend, PostgreSQL database, React/Next.js frontend.
+- AI/RAG rules: Use Claude for generation, implement source-only RAG with no embeddings or vector DBs.
+- Implement User registration/login, Study Pack creation from PDF/text, concept extraction, check generation, a risk-based learning session engine, and a basic dashboard.
+- The user has since provided numerous additional features:
+    - PDF/URL/Text uploads with no size limit (via chunking).
+    - AI-based document type detection.
+    - Generation of content in the source material's language (German).
+    - Session filtering by document source type.
+    - Improved AI pipeline performance (Haiku/Sonnet split, parallelism).
+    - Real-time upload progress tracking (SSE).
+    - Enhanced answer evaluation UI.
+
+**User's preferred language**: The user communicates in both German and English. The agent should respond in the language of the user's last message, defaulting to English if unsure.
+
+**what currently exists?**
+A functional multi-user learning application with a FastAPI backend, React frontend, and MongoDB database.
+
+**Core Features:**
+-   **Authentication:** Multi-user JWT-based registration and login.
+-   **Content Pipeline:**
+    -   Users can create Study Packs from large PDFs, text, or URLs.
+    -   PDFs are uploaded via a chunked mechanism to bypass size limits.
+    -   An AI pipeline automatically detects the document type (e.g., Theoriebuch, Abschlussprüfung).
+    -   The material is chunked, and a multi-tier AI process (Claude Haiku for extraction, Sonnet for generation) creates  and  (questions) in the source material's language (e.g., German).
+    -   The pipeline is parallelized and reports real-time progress to the frontend via Server-Sent Events (SSE).
+-   **Learning Sessions:**
+    -   Risk-based engine prioritizes concepts the user struggles with.
+    -   Users can filter a session by document type (e.g., Only practice exam questions).
+    -   A detailed UI shows the user how the AI interpreted their free-text answer and what key ideas were missing.
+-   **User Data:** Two large German textbooks (WuG ES5 & ES6) have been processed, creating a library of over 1,400 concepts for testing.
+
+**Last working item**:
+-   **Last item agent was working:** The agent finished a long-running background job to process two large textbooks ( and ). After the jobs completed, the agent implemented a data backfill to assign the correct  to all generated concepts and then verified that the new Filter Session by Source feature was working correctly with a screenshot.
+-   **Status:** USER VERIFICATION PENDING
+-   **Agent Testing Done:** Y
+-   **Which testing method agent to use?** manual testing by curl
+-   **User Testing Done:** N
+
+**All Pending/In progress Issue list**:
+None.
+
+**In progress Task List**:
+None.
+
+**Upcoming and Future Tasks**
+-   **(P0) Improve Chunking Quality & Benchmark:** The user has prioritized improving the quality of concept extraction by addressing the limitations of simple chunking.
+    -   **Task:** Implement and test a new chunking strategy with larger chunk sizes and overlap.
+    -   **Task:** Implement and test a concept merging step to deduplicate similar concepts extracted from different chunks.
+    -   **Task:** Establish a benchmark using a specific chapter of the  textbook. Create a Before/After quality report showing metrics like Duplicates Merged and Avg. Concepts/Chunk to measure the improvement, as discussed with the user. The code for this has been written but not yet tested with a new upload.
+-   **(P1) Benchmark Haiku vs. Sonnet for Check Generation:**
+    -   **Task:** The user wants a qualitative comparison to see if the cheaper, faster Haiku model can be used for generating questions ().
+    -   **Plan:** Take ~20 existing concepts and generate checks using three methods: a) Sonnet only, b) Haiku only, and c) a hybrid approach (Haiku for simple questions, Sonnet for complex ones). Present the results to the user for evaluation, focusing on the quality of Scenario and Error-Spotting questions.
+-   **(P2) Implement Exam Urgency Boost:**
+    -   **Description:** Add an  to  to create an urgency multiplier that increases a concept's risk as the date approaches.
+-   **(P3) Cross-Book Concept Merging:**
+    -   **Description:** The current merging logic works within a single study pack. This task is to extend it to find and merge duplicate concepts across different study packs (e.g., a Liquidity concept from ES5 and ES6).
+-   **(P4) Session Persistence:**
+    -   **Description:** Allow a user to resume a learning session if they close the browser or navigate away.
+
+**Completed work in this session**
+-   **UI for Detailed Answer Evaluation:** Implemented the full UI spec for showing the user how their answer was understood, what was missing, and any incorrect assumptions.
+-   **Chunked PDF Uploads:** Re-architected the upload flow to support large files by chunking them on the frontend and assembling them on the backend.
+-   **Removed Processing Limits:** Removed the 15-concept cap per job, allowing full documents to be processed.
+-   **Multi-Lingual Content Generation:** Updated AI prompts to detect the source material's language and generate all content (concepts, questions) in that language.
+-   **URL as a Source:** Added the ability to create study packs directly from a URL.
+-   **AI Document Type Detection:** Implemented an AI step to classify uploaded material (e.g., Theory Book, Practice Exam).
+-   **Session Source Filtering:** Implemented a UI and backend logic to allow users to start a study session filtered by document type.
+-   **AI Pipeline Optimization:**
+    -   Fixed a major performance bug where blocking LLM calls froze the entire server.
+    -   Implemented a two-tier model strategy (Haiku for simple tasks, Sonnet for complex reasoning) to reduce cost and latency.
+    -   Increased pipeline parallelism.
+-   **Real-time Progress:** Replaced frontend polling with Server-Sent Events (SSE) for a live, detailed progress bar during uploads.
+-   **Processed Real User Data:** Successfully ingested two large German textbooks, creating a testbed of 1,439 concepts.
+
+**Earlier issues found/mentioned but not fixed**
+-   **Issue 1: Database Mismatch - MongoDB used instead of PostgreSQL**
+    -   **Debug checklist:** The original product spec required PostgreSQL, but the application was built with MongoDB.
+    -   **Why to solve this issue and what will be achieved with this?** The user acknowledged this is not fatal for MVP but is a known architectural debt that may impact future analytics capabilities.
+    -   **Should Test frontend/backend/both after fix:** Both.
+    -   **Is recurring issue?** N
+
+**Known issue recurrence from previous fork**
+-   None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+-   **Backend**: FastAPI, Pydantic
+-   **Frontend**: React, Tailwind CSS
+-   **Database**: MongoDB
+-   **Architecture**: REST API, Server-Sent Events (SSE) for real-time updates, background processing via .
+-   **AI**:
+    -   Source-only RAG.
+    -   Multi-tier AI Pipeline (Claude Haiku 4.5 for extraction/classification, Claude Sonnet 4.6 for generation/reasoning).
+    -   Two-step Answer Evaluation (Claim Extraction + Deterministic Matching).
+-   **File Handling**: Frontend file chunking for large uploads.
+
+**key DB schema**
+-   **StudyPack**: {..., : [ObjectId], : str, : str}
+-   **Concept**: {..., : str, : str}
+-   **Job**: {..., , , , , , : {}}
+
+**changes in tech stack**
+-   The application uses **MongoDB**, a deviation from the original spec which mandated **PostgreSQL**.
+
+**All files of reference**
+-   : The entire backend logic, including all endpoints, AI pipeline, and new SSE/chunking logic.
+-   : Contains the new UI for PDF/text/URL uploads, chunking logic, and the SSE-powered progress tracker.
+-   : Displays study pack contents and the modal to start a filtered session.
+-   : The learning session UI.
+-   : Frontend API client, updated with new streaming and upload endpoints.
+
+**Areas that need refactoring**:
+-   The MongoDB vs. PostgreSQL architectural deviation remains.
+-   Concept deduplication (merging) is a planned refactoring task to improve data quality.
+
+**key api endpoints**
+-   : Uploads a single chunk of a file.
+-   : Finalizes a chunked upload and starts the processing job.
+-   : Creates a study pack from a web URL.
+-   : An SSE endpoint that streams real-time progress of a processing job.
+-   : Starts a new session, now accepts a .
+
+**Critical Info for New Agent**
+-   **Top Priority:** The immediate next step is to test the newly implemented chunking improvements (larger chunks, overlap, merging). You must upload the benchmark document (a chapter from WuG ES5), generate the Before/After report, and present the results to the user.
+-   **User Mentality:** The user is technically savvy and deeply involved in the product strategy. They value measurable progress (like the Before/After report), structured thinking, and pragmatic solutions. Always explain your reasoning.
+-   **AI Model Strategy:** The pipeline now uses a two-tier model approach. Be mindful of which model (Haiku 4.5 vs. Sonnet 4.6) is appropriate for which task. The user has requested a benchmark comparing their quality for question generation.
+
+**documents and test reports created in this job**
+-    (Continuously updated)
+-   Test reports from previous features are available in .
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  **User (Msg 685-687):** Acknowledges the ES5 book processing is complete and that the total concept count is over 1400.
+2.  **User (Msg 621):** Asks for an ETA on the book processing.
+3.  **User (Msg 584-592):** Points out that the agent is using an incorrect model name for Claude Haiku and provides the correct one, which the agent immediately fixes. Mentions cross-book merging as a future task.
+4.  **User (Msg 575):** Asks for an ETA on the book backfill. Agrees with the hybrid model testing plan (Haiku for simple questions, Sonnet for complex).
+5.  **User (Msg 570):** Asks the agent to proceed with waiting for the book processing to finish before starting the Haiku vs. Sonnet benchmark.
+6.  **User (Msg 569):** Proposes a pragmatic test to compare Haiku vs. Sonnet quality for check generation.
+7.  **User (Msg 565):** Asks for clarification on how  are generated (confirming it's a single batch call per concept).
+8.  **User (Msg 517):** Provides several high-impact suggestions for improving the pipeline performance: using Haiku for extraction, increasing parallelism, and implementing an SSE-based progress bar.
+9.  **User (Msg 487):** Approves the plan for a Before/After report to benchmark chunking quality improvements, suggests adding concepts per chunk as a metric, and praises the agent's structured thinking.
+10. **User (Msg 485):** Confirms that improving chunk quality is the correct top priority and provides specific advice on how to implement the concept merging step (When in doubt: keep separate). Asks how the agent will test the quality improvement.
+
+**Project Health Check:**
+-   **Broken**: The database implementation (MongoDB) is a deviation from the specified architecture (PostgreSQL).
+-   **Mocked**: The background task system uses FastAPI's built-in features, which are not as robust as a dedicated job queue like Celery/Redis for a production environment.
+
+**3rd Party Integrations**
+-   **Anthropic Claude**: Used for all AI tasks via Emergent LLM Key.
+    -   : For mechanical tasks like extraction, classification, and filtering.
+    -   : For reasoning and generation tasks like creating questions and debriefs.
+
+**Testing status**
+-   **Testing agent used after significant changes:** YES, used earlier in the session.
+-   **Troubleshoot agent used after agent stuck in loop:** NO
+-   **Test files created:** None.
+-   **Known regressions:** None.
+
+**Credentials to test flow:**
+-   **Email:** 
+-   **Password:** 
+
+**What agent forgot to execute**
+-   The new chunking quality improvements (larger chunks, overlap, merging) have been coded but **not yet tested** with a file upload. This is the immediate next task. The agent was waiting for the long-running book processing jobs to finish before starting this test.</analysis>
