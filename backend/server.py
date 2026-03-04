@@ -717,6 +717,7 @@ class UpdateConceptRequest(BaseModel):
 class StartSessionRequest(BaseModel):
     pack_id: str
     duration_minutes: int = 10
+    doc_type_filter: Optional[str] = None  # None or "all" = no filter
 
 
 class AnswerRequest(BaseModel):
@@ -815,7 +816,8 @@ async def get_pack(pack_id: str, user=Depends(get_current_user)):
 
 # ─── Upload & AI Pipeline (Background Task) ──────────────────────────────────
 
-async def _process_single_chunk(chunk: str, pack_id: str, job_id: str) -> list:
+async def _process_single_chunk(chunk: str, pack_id: str, job_id: str,
+                               doc_type: str = "", source_name: str = "") -> list:
     """Extract concepts + checks from one chunk and persist to DB."""
     extracted = await extract_concepts_from_chunk(chunk)
     saved = []
@@ -828,6 +830,8 @@ async def _process_single_chunk(chunk: str, pack_id: str, job_id: str) -> list:
             "exam_weight": 1.0,
             "exam_weight_label": "medium",
             "prerequisite_concepts": concept_data.get("prerequisite_concepts", []),
+            "doc_type": doc_type,
+            "source_name": source_name,
             "created_at": datetime.now(timezone.utc),
         }
         c_result = await concepts_col.insert_one(concept_doc)
@@ -901,7 +905,7 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str,
 
         async def bounded(chunk):
             async with semaphore:
-                return await _process_single_chunk(chunk, pack_id, job_id)
+                return await _process_single_chunk(chunk, pack_id, job_id, doc_type, source_name)
 
         results = await asyncio.gather(*[bounded(c) for c in chunks], return_exceptions=True)
 
@@ -1258,6 +1262,16 @@ async def start_session(req: StartSessionRequest, user=Depends(get_current_user)
     if not concepts_list:
         raise HTTPException(status_code=400, detail="No concepts in this pack. Upload material first.")
 
+    # Apply doc_type filter if requested
+    if req.doc_type_filter and req.doc_type_filter != "all":
+        filtered = [c for c in concepts_list if c.get("doc_type") == req.doc_type_filter]
+        if not filtered:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Keine Konzepte für Quelle '{req.doc_type_filter}' gefunden."
+            )
+        concepts_list = filtered
+
     # Calculate risk per concept and build prioritized queue
     prioritized = []
     for concept in concepts_list:
@@ -1290,6 +1304,7 @@ async def start_session(req: StartSessionRequest, user=Depends(get_current_user)
         "user_id": user_id,
         "pack_id": req.pack_id,
         "duration_minutes": req.duration_minutes,
+        "doc_type_filter": req.doc_type_filter or "all",
         "queue": queue,
         "current_index": 0,
         "started_at": datetime.now(timezone.utc),

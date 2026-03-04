@@ -41,8 +41,12 @@ export const updateConcept = (conceptId, data) => api.patch(`/api/concepts/${con
 export const deleteConcept = (conceptId) => api.delete(`/api/concepts/${conceptId}`);
 
 // Sessions
-export const startSession = (packId, durationMinutes) =>
-  api.post('/api/sessions/start', { pack_id: packId, duration_minutes: durationMinutes });
+export const startSession = (packId, durationMinutes, docTypeFilter = null) =>
+  api.post('/api/sessions/start', {
+    pack_id: packId,
+    duration_minutes: durationMinutes,
+    ...(docTypeFilter && docTypeFilter !== 'all' ? { doc_type_filter: docTypeFilter } : {}),
+  });
 
 export const answerSession = (data) => api.post('/api/sessions/answer', data);
 export const getSession = (sessionId) => api.get(`/api/sessions/${sessionId}`);

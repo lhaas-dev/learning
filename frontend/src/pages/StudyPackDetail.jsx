@@ -5,10 +5,35 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Upload, Play, Pencil, Trash2, Check, X,
   BookOpen, AlertTriangle, Loader2, ChevronDown,
-  AlertCircle, CheckCircle, Flame, GitBranch, Target
+  AlertCircle, CheckCircle, Flame, GitBranch, Target, Tag, Filter
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { getPack, listConcepts, updateConcept, deleteConcept, startSession } from '../services/api';
+
+// ─── Doc type badge ───────────────────────────────────────────────────────────
+const DOC_TYPE_COLORS = {
+  'Theoriebuch':        { color: '#2F81F7', bg: 'rgba(47,129,247,0.1)' },
+  'Theorie & Aufgaben': { color: '#00E5FF', bg: 'rgba(0,229,255,0.08)' },
+  'Abschlussprüfung':   { color: '#FF2D55', bg: 'rgba(255,45,85,0.1)' },
+  'Übungstest':         { color: '#FFCC00', bg: 'rgba(255,204,0,0.1)' },
+  'Zusammenfassung':    { color: '#00C853', bg: 'rgba(0,200,83,0.1)' },
+  'Skript':             { color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' },
+  'Webseite':           { color: '#00E5FF', bg: 'rgba(0,229,255,0.08)' },
+  'Sonstiges':          { color: '#8B949E', bg: 'rgba(139,148,158,0.1)' },
+};
+function DocTypeBadge({ type, small = false }) {
+  if (!type) return null;
+  const cfg = DOC_TYPE_COLORS[type] || DOC_TYPE_COLORS['Sonstiges'];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 font-mono rounded border ${small ? 'text-[10px] px-1.5 py-0.5' : 'text-xs px-2 py-0.5'}`}
+      style={{ color: cfg.color, background: cfg.bg, borderColor: `${cfg.color}35` }}
+    >
+      <Tag size={small ? 8 : 9} />
+      {type}
+    </span>
+  );
+}
 
 function RiskLabel({ value }) {
   const pct = Math.round((value || 0) * 100);
@@ -166,6 +191,7 @@ function ConceptCard({ concept, onUpdate, onDelete }) {
             <div className="flex items-center gap-2 flex-wrap min-w-0">
               <h4 className="font-heading text-sm font-semibold text-text-primary">{concept.title}</h4>
               <RiskLabel value={concept.risk} />
+              {concept.doc_type && <DocTypeBadge type={concept.doc_type} small />}
             </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
               <ExamWeightSelect value={weight} onChange={handleWeightChange} />
@@ -215,17 +241,25 @@ function ConceptCard({ concept, onUpdate, onDelete }) {
   );
 }
 
-function StartSessionModal({ packId, onClose, onStart }) {
+function StartSessionModal({ packId, concepts, onClose, onStart }) {
   const [duration, setDuration] = useState(10);
+  const [docTypeFilter, setDocTypeFilter] = useState(null); // null = all sources
   const [loading, setLoading] = useState(false);
+
+  // Derive unique doc types present in this pack (exclude empty/null)
+  const availableTypes = [...new Set(concepts.map(c => c.doc_type).filter(Boolean))].sort();
+
+  const filteredCount = docTypeFilter
+    ? concepts.filter(c => c.doc_type === docTypeFilter).length
+    : concepts.length;
 
   const handleStart = async () => {
     setLoading(true);
     try {
-      const res = await startSession(packId, duration);
+      const res = await startSession(packId, duration, docTypeFilter);
       onStart(res.data);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to start session');
+      toast.error(err.response?.data?.detail || 'Fehler beim Starten der Session');
       setLoading(false);
     }
   };
@@ -239,19 +273,68 @@ function StartSessionModal({ packId, onClose, onStart }) {
         data-testid="start-session-modal"
       >
         <div className="flex items-center justify-between mb-5">
-          <h3 className="font-heading text-lg font-semibold">Start Session</h3>
+          <h3 className="font-heading text-lg font-semibold">Session starten</h3>
           <button onClick={onClose} className="text-text-secondary hover:text-white" data-testid="close-session-modal">
             <X size={18} />
           </button>
         </div>
-        <p className="text-sm text-text-secondary mb-5">
-          Concepts are selected by risk — your weakest areas come first.
-        </p>
+
+        {/* Source / doc_type filter — only shown when pack has multiple types */}
+        {availableTypes.length > 1 && (
+          <div className="mb-5">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Filter size={11} className="text-text-muted" />
+              <span className="text-xs font-mono text-text-muted uppercase tracking-widest">Quelle filtern</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5" data-testid="doc-type-filter-group">
+              <button
+                data-testid="filter-all"
+                onClick={() => setDocTypeFilter(null)}
+                className={`text-xs font-mono px-2.5 py-1.5 rounded-md border transition-all ${
+                  docTypeFilter === null
+                    ? 'border-brand-primary bg-brand-primary/10 text-brand-primary'
+                    : 'border-white/10 text-text-secondary hover:border-white/20'
+                }`}
+              >
+                Alle ({concepts.length})
+              </button>
+              {availableTypes.map(type => {
+                const count = concepts.filter(c => c.doc_type === type).length;
+                const cfg = DOC_TYPE_COLORS[type] || DOC_TYPE_COLORS['Sonstiges'];
+                const isActive = docTypeFilter === type;
+                return (
+                  <button
+                    key={type}
+                    data-testid={`filter-${type.toLowerCase().replace(/\s+/g, '-').replace(/ü/g, 'ue')}`}
+                    onClick={() => setDocTypeFilter(isActive ? null : type)}
+                    className="text-xs font-mono px-2.5 py-1.5 rounded-md border transition-all"
+                    style={isActive
+                      ? { borderColor: cfg.color, background: cfg.bg, color: cfg.color }
+                      : { borderColor: 'rgba(255,255,255,0.1)', color: 'var(--color-text-secondary)' }
+                    }
+                  >
+                    {type} ({count})
+                  </button>
+                );
+              })}
+            </div>
+            {docTypeFilter && (
+              <p className="text-xs font-mono text-text-muted mt-2">
+                {filteredCount} Konzepte aus dieser Quelle
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Duration selector */}
         <div className="space-y-2 mb-6">
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className="text-xs font-mono text-text-muted uppercase tracking-widest">Dauer</span>
+          </div>
           {[
-            { mins: 10, label: '10 min', sublabel: '~8 concepts' },
-            { mins: 20, label: '20 min', sublabel: '~15 concepts' },
-            { mins: 30, label: '30 min', sublabel: '~22 concepts' },
+            { mins: 10, label: '10 Min', sublabel: '~8 Konzepte' },
+            { mins: 20, label: '20 Min', sublabel: '~15 Konzepte' },
+            { mins: 30, label: '30 Min', sublabel: '~22 Konzepte' },
           ].map(({ mins, label, sublabel }) => (
             <button
               key={mins}
@@ -268,6 +351,7 @@ function StartSessionModal({ packId, onClose, onStart }) {
             </button>
           ))}
         </div>
+
         <button
           data-testid="confirm-start-session-btn"
           onClick={handleStart}
@@ -275,7 +359,7 @@ function StartSessionModal({ packId, onClose, onStart }) {
           className="btn-primary w-full justify-center"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-          {loading ? 'Loading...' : 'Start Session'}
+          {loading ? 'Laden...' : `Session starten${docTypeFilter ? ` · ${docTypeFilter}` : ''}`}
         </button>
       </motion.div>
     </div>
@@ -420,6 +504,7 @@ export default function StudyPackDetail() {
       {showSessionModal && (
         <StartSessionModal
           packId={packId}
+          concepts={concepts}
           onClose={() => setShowSessionModal(false)}
           onStart={onSessionStart}
         />
