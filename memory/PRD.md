@@ -89,9 +89,15 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 - [x] Session Debrief screen (Top Knowledge Risks, Dominant Pattern, 5-Min Fix Drill CTA)
 - [x] Drill session flow (navigates to active session targeting weak concepts)
 - [x] PDF upload via chunked upload (POST /api/upload/chunk + /api/upload/finalize) — no proxy size limit, progress bar
-- [x] No concept limit — all chunks processed, all concepts extracted (tested: 526 concepts from 5.9MB WuG PDF)
+- [x] No concept limit — all chunks processed, all concepts extracted
 - [x] Pipeline parallelized: 2 chunks concurrently with asyncio.Semaphore
 - [x] asyncio.to_thread for LLM calls — server stays responsive during AI processing
+- [x] URL/Link source upload (POST /api/upload/url) — fetches public pages, Wikipedia, etc.
+- [x] Multiple PDFs per pack — primary + optional extras, each gets own job tracker
+- [x] AI document type detection — classifies each upload as Theoriebuch, Abschlussprüfung, Übungstest, etc.
+- [x] DocTypeBadge component — displayed in upload result + job tracker
+- [x] German language generation — all AI output in source material language
+- [x] Upload page fully German UI ("Material hinzufügen", "Konzepte extrahieren", etc.)
   - Block 1: "Correct answer (core idea)" — bold core answer + collapsible explanation
   - Block 2: "What we understood from your answer" — extracted_claims bullet list, always visible for non-scenario
   - Block 3: "Missing or incorrect ideas" — "Missing key ideas:" list or "All required core ideas were addressed."

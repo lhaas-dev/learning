@@ -61,6 +61,9 @@ export const uploadChunk = (data) =>
 export const finalizeUpload = (data) =>
   api.post('/api/upload/finalize', data);
 
+export const uploadFromUrl = (packId, url) =>
+  api.post('/api/upload/url', { pack_id: packId, url });
+
 // Dashboard
 export const getDashboardOverview = () => api.get('/api/dashboard/overview');
 

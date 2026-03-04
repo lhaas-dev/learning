@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Bac
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import Optional, Any
+from typing import Optional, Any, List
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 import os
@@ -15,6 +15,7 @@ import base64
 import shutil
 import asyncio
 import logging
+import requests as http_requests
 
 from passlib.context import CryptContext
 from jose import jwt, JWTError
@@ -147,6 +148,59 @@ def _extract_text_from_pdf_sync(pdf_bytes: bytes) -> str:
 # Legacy sync wrapper kept for backward compat
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     return _extract_text_from_pdf_sync(pdf_bytes)
+
+
+def _fetch_url_text_sync(url: str) -> str:
+    """Fetch a public URL and extract readable text (Wikipedia, articles, etc.)."""
+    from bs4 import BeautifulSoup
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; KnowledgeMemory/1.0; +https://knowledgememory.app)"}
+    resp = http_requests.get(url, headers=headers, timeout=15)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+    # Remove boilerplate elements
+    for tag in soup.find_all(["script", "style", "nav", "footer", "header", "aside", "figure"]):
+        tag.decompose()
+    # Prefer main content containers
+    main = (
+        soup.find("main")
+        or soup.find("article")
+        or soup.find(id="content")
+        or soup.find(id="mw-content-text")   # Wikipedia
+        or soup.find(class_="mw-parser-output")  # Wikipedia
+        or soup.body
+    )
+    text = (main or soup).get_text(separator="\n", strip=True)
+    # Collapse excessive blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+async def detect_document_type(text_sample: str) -> str:
+    """Classify the uploaded document into a German-language type label."""
+    system = "You are a document type classifier. Respond only with valid JSON."
+    prompt = f"""Classify this document based on its content and structure.
+
+Choose exactly one type:
+- Theoriebuch (pure theory, definitions, structured explanations)
+- Theorie & Aufgaben (theory combined with practice exercises)
+- Abschlussprüfung (final exam / Abschlussprüfung / Maturaprüfung)
+- Übungstest (practice test or mock exam)
+- Zusammenfassung (summary or condensed notes)
+- Skript (lecture script or handout)
+- Webseite (web page, Wikipedia, online article)
+- Sonstiges (other)
+
+Document sample:
+<<<
+{text_sample[:2500]}
+>>>
+
+Return ONLY valid JSON: {{"type": "Theoriebuch"}}"""
+    try:
+        response = await call_claude(system, prompt)
+        return extract_json(response).get("type", "Sonstiges")
+    except Exception:
+        return "Sonstiges"
 
 
 # Temp directory for chunked uploads
@@ -814,14 +868,24 @@ async def _process_single_chunk(chunk: str, pack_id: str, job_id: str) -> list:
     return saved
 
 
-async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
+async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str,
+                           source_name: str = "", doc_type: str = ""):
     """Background task: extract concepts + checks from ALL chunks (no hard limit).
     Up to 2 chunks processed in parallel to balance speed vs. API rate limits.
     """
     try:
+        # Detect document type if not provided
+        if not doc_type:
+            doc_type = await detect_document_type(raw_text)
+
         await jobs_col.update_one(
             {"_id": ObjectId(job_id)},
-            {"$set": {"status": "processing", "started_at": datetime.now(timezone.utc)}}
+            {"$set": {
+                "status": "processing",
+                "started_at": datetime.now(timezone.utc),
+                "doc_type": doc_type,
+                "source_name": source_name,
+            }}
         )
 
         chunks = chunk_text(raw_text)
@@ -904,8 +968,10 @@ async def upload_material(
         raise HTTPException(status_code=404, detail="Pack not found")
 
     raw_text = ""
+    source_name = ""
     if file and file.filename:
         content = await file.read()
+        source_name = file.filename
         if file.filename.lower().endswith(".pdf"):
             try:
                 raw_text = await asyncio.to_thread(_extract_text_from_pdf_sync, content)
@@ -915,6 +981,7 @@ async def upload_material(
             raw_text = content.decode("utf-8", errors="ignore")
     elif text:
         raw_text = text
+        source_name = "Text"
     else:
         raise HTTPException(status_code=400, detail="No file or text provided")
 
@@ -925,7 +992,9 @@ async def upload_material(
     job_doc = {
         "pack_id": pack_id,
         "user_id": str(user["_id"]),
-        "status": "queued",  # queued → processing → complete | failed
+        "status": "queued",
+        "source_name": source_name,
+        "doc_type": "",
         "created_at": datetime.now(timezone.utc),
         "started_at": None,
         "completed_at": None,
@@ -938,7 +1007,7 @@ async def upload_material(
     job_id = str(result.inserted_id)
 
     # Run AI pipeline in background (non-blocking)
-    background_tasks.add_task(_run_ai_pipeline, job_id, pack_id, raw_text)
+    background_tasks.add_task(_run_ai_pipeline, job_id, pack_id, raw_text, source_name)
 
     return {"job_id": job_id, "status": "queued"}
 
@@ -1015,6 +1084,8 @@ async def finalize_upload(
         "pack_id": req.pack_id,
         "user_id": str(user["_id"]),
         "status": "queued",
+        "source_name": req.filename,
+        "doc_type": "",
         "created_at": datetime.now(timezone.utc),
         "started_at": None,
         "completed_at": None,
@@ -1025,7 +1096,61 @@ async def finalize_upload(
     }
     result = await jobs_col.insert_one(job_doc)
     job_id = str(result.inserted_id)
-    background_tasks.add_task(_run_ai_pipeline, job_id, req.pack_id, raw_text)
+    background_tasks.add_task(_run_ai_pipeline, job_id, req.pack_id, raw_text, req.filename)
+    return {"job_id": job_id, "status": "queued"}
+
+
+# ─── URL Upload Endpoint ──────────────────────────────────────────────────────
+
+class UrlUploadRequest(BaseModel):
+    pack_id: str
+    url: str
+
+
+@app.post("/api/upload/url")
+async def upload_from_url(
+    req: UrlUploadRequest,
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user),
+):
+    """Fetch a public URL, extract its text, and start the AI pipeline."""
+    try:
+        pack = await packs_col.find_one({"_id": ObjectId(req.pack_id), "owner_id": str(user["_id"])})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid pack ID")
+    if not pack:
+        raise HTTPException(status_code=404, detail="Pack not found")
+
+    try:
+        raw_text = await asyncio.to_thread(_fetch_url_text_sync, req.url)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not fetch URL: {str(e)}")
+
+    if not raw_text.strip():
+        raise HTTPException(status_code=400, detail="No readable text found at this URL")
+
+    # Use domain as source name
+    from urllib.parse import urlparse
+    source_name = urlparse(req.url).netloc or req.url
+
+    job_doc = {
+        "pack_id": req.pack_id,
+        "user_id": str(user["_id"]),
+        "status": "queued",
+        "source_name": source_name,
+        "source_url": req.url,
+        "doc_type": "",
+        "created_at": datetime.now(timezone.utc),
+        "started_at": None,
+        "completed_at": None,
+        "concepts_extracted": 0,
+        "chunks_processed": 0,
+        "concepts": [],
+        "error": None,
+    }
+    result = await jobs_col.insert_one(job_doc)
+    job_id = str(result.inserted_id)
+    background_tasks.add_task(_run_ai_pipeline, job_id, req.pack_id, raw_text, source_name)
     return {"job_id": job_id, "status": "queued"}
 
 
