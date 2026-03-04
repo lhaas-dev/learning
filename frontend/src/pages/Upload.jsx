@@ -6,7 +6,17 @@ import {
   ArrowLeft, Upload as UploadIcon, FileText, X, Check,
   Loader2, AlertTriangle, ChevronRight, Trash2, BookOpen, Clock
 } from 'lucide-react';import Navbar from '../components/Navbar';
-import { uploadMaterial, getJobStatus, deleteConcept } from '../services/api';
+import { uploadMaterial, getJobStatus, deleteConcept, uploadChunk, finalizeUpload } from '../services/api';
+
+// Convert ArrayBuffer to base64 string (chunk-safe)
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
 
 function ConceptPreviewCard({ concept, onDelete }) {
   const [deleting, setDeleting] = useState(false);
@@ -66,6 +76,7 @@ export default function Upload() {
   const [jobStatus, setJobStatus] = useState(null); // 'queued' | 'processing' | 'complete' | 'failed'
   const [result, setResult] = useState(null);
   const [elapsed, setElapsed] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(null); // {chunk, total} during chunked upload
   const fileInputRef = useRef(null);
   const pollRef = useRef(null);
   const elapsedRef = useRef(null);
@@ -118,18 +129,20 @@ export default function Upload() {
       return;
     }
 
+    // PDF files use chunked upload to bypass proxy size limits
+    if (mode === 'file') {
+      await handleChunkedUpload();
+      return;
+    }
+
+    // Text mode: direct upload
     setLoading(true);
     setJobId(null);
     setJobStatus(null);
 
     try {
       const formData = new FormData();
-      if (mode === 'file') {
-        formData.append('file', file);
-      } else {
-        formData.append('text', text);
-      }
-
+      formData.append('text', text);
       const res = await uploadMaterial(packId, formData);
       const jid = res.data.job_id;
       setJobId(jid);
@@ -143,6 +156,41 @@ export default function Upload() {
     }
   };
 
+  const handleChunkedUpload = async () => {
+    const CHUNK_SIZE = 200 * 1024; // 200KB per chunk
+    const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+    setLoading(true);
+    setUploadProgress({ chunk: 0, total: totalChunks });
+
+    try {
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const slice = file.slice(start, end);
+        const arrayBuffer = await slice.arrayBuffer();
+        const data = arrayBufferToBase64(arrayBuffer);
+
+        await uploadChunk({ upload_id: uploadId, chunk_index: i, total_chunks: totalChunks, data });
+        setUploadProgress({ chunk: i + 1, total: totalChunks });
+      }
+
+      // All chunks sent — finalize
+      setUploadProgress(null);
+      const res = await finalizeUpload({ upload_id: uploadId, pack_id: packId, filename: file.name });
+      const jid = res.data.job_id;
+      setJobId(jid);
+      setJobStatus('queued');
+      toast.info('PDF uploaded — AI is extracting concepts...');
+      startPolling(jid);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Upload failed. Please try again.');
+      setLoading(false);
+      setUploadProgress(null);
+    }
+  };
+
   const onConceptDelete = (id) => {
     setResult((prev) => ({
       ...prev,
@@ -153,10 +201,6 @@ export default function Upload() {
   const handleFileChange = (e) => {
     const f = e.target.files[0];
     if (f) {
-      if (f.size > 10 * 1024 * 1024) {
-        toast.error('File too large (max 10MB)');
-        return;
-      }
       setFile(f);
     }
   };
@@ -265,7 +309,7 @@ export default function Upload() {
                     <>
                       <UploadIcon size={28} className="mx-auto mb-3 text-text-muted opacity-50" />
                       <p className="text-sm text-text-secondary mb-1">Click to select PDF</p>
-                      <p className="text-xs text-text-muted font-mono">Max 10MB · PDF only</p>
+                      <p className="text-xs text-text-muted font-mono">PDF only · large files supported</p>
                     </>
                   )}
                 </div>
@@ -298,7 +342,11 @@ export default function Upload() {
               {loading ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  {jobStatus === 'queued' ? 'Queued...' : `Processing... ${elapsed}s`}
+                  {uploadProgress
+                    ? `Uploading chunk ${uploadProgress.chunk}/${uploadProgress.total}...`
+                    : jobStatus === 'queued'
+                    ? 'Queued...'
+                    : `Processing... ${elapsed}s`}
                 </>
               ) : (
                 <>
@@ -309,25 +357,43 @@ export default function Upload() {
             </button>
 
             {loading && (
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2 text-xs text-text-muted font-mono">
-                  <Clock size={11} />
-                  <span>AI is reading your material — typically 30–90 seconds</span>
-                </div>
-                <div className="mt-2 flex justify-center gap-1">
-                  {['Chunking text', 'Extracting concepts', 'Generating checks', 'Quality filtering'].map((step, i) => (
-                    <span
-                      key={step}
-                      className={`text-xs px-2 py-0.5 rounded font-mono ${
-                        elapsed > i * 15
-                          ? 'text-brand-primary bg-brand-primary/10'
-                          : 'text-text-muted bg-white/5'
-                      }`}
-                    >
-                      {step}
-                    </span>
-                  ))}
-                </div>
+              <div className="text-center space-y-3">
+                {uploadProgress && (
+                  <div>
+                    <div className="flex justify-between text-xs font-mono text-text-muted mb-1">
+                      <span>Uploading PDF</span>
+                      <span>{uploadProgress.chunk}/{uploadProgress.total} chunks</span>
+                    </div>
+                    <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-brand-primary rounded-full transition-all duration-300"
+                        style={{ width: `${Math.round((uploadProgress.chunk / uploadProgress.total) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {!uploadProgress && (
+                  <div className="flex items-center justify-center gap-2 text-xs text-text-muted font-mono">
+                    <Clock size={11} />
+                    <span>AI is reading your material — may take a few minutes for large documents</span>
+                  </div>
+                )}
+                {!uploadProgress && (
+                  <div className="flex justify-center gap-1">
+                    {['Chunking text', 'Extracting concepts', 'Generating checks', 'Quality filtering'].map((step, i) => (
+                      <span
+                        key={step}
+                        className={`text-xs px-2 py-0.5 rounded font-mono ${
+                          elapsed > i * 15
+                            ? 'text-brand-primary bg-brand-primary/10'
+                            : 'text-text-muted bg-white/5'
+                        }`}
+                      >
+                        {step}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </motion.div>

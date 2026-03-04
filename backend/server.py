@@ -11,6 +11,9 @@ import math
 import uuid
 import re
 import io
+import base64
+import shutil
+import asyncio
 import logging
 
 from passlib.context import CryptContext
@@ -125,7 +128,8 @@ def chunk_text(text: str, max_words: int = 500) -> list:
     return [c for c in chunks if len(c.split()) > 30]
 
 
-def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+def _extract_text_from_pdf_sync(pdf_bytes: bytes) -> str:
+    """Sync PDF text extraction — safe to call via asyncio.to_thread."""
     try:
         import PyPDF2
         reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
@@ -137,7 +141,17 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
         return "\n\n".join(texts)
     except Exception as e:
         logger.error(f"PDF extraction failed: {e}")
-        raise HTTPException(status_code=400, detail=f"PDF extraction failed: {str(e)}")
+        raise RuntimeError(f"PDF extraction failed: {str(e)}")
+
+
+# Legacy sync wrapper kept for backward compat
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    return _extract_text_from_pdf_sync(pdf_bytes)
+
+
+# Temp directory for chunked uploads
+UPLOAD_TEMP_DIR = "/tmp/km_uploads"
+os.makedirs(UPLOAD_TEMP_DIR, exist_ok=True)
 
 
 # ─── AI Service ───────────────────────────────────────────────────────────────
@@ -151,12 +165,9 @@ RAG_CONSTRAINT = (
 
 
 async def call_claude(system_message: str, user_text: str) -> str:
-    import asyncio
-
     def _blocking_call():
         """Run the LLM call in a thread to avoid blocking the event loop."""
-        import asyncio as _asyncio
-        loop = _asyncio.new_event_loop()
+        loop = asyncio.new_event_loop()
         try:
             chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
@@ -663,6 +674,19 @@ class EvaluateAnswerRequest(BaseModel):
     user_answer: str
 
 
+class UploadChunkRequest(BaseModel):
+    upload_id: str
+    chunk_index: int
+    total_chunks: int
+    data: str  # base64-encoded chunk bytes
+
+
+class FinalizeUploadRequest(BaseModel):
+    upload_id: str
+    pack_id: str
+    filename: str
+
+
 # ─── Auth Routes ──────────────────────────────────────────────────────────────
 @app.post("/api/auth/register")
 async def register(req: RegisterRequest):
@@ -729,8 +753,63 @@ async def get_pack(pack_id: str, user=Depends(get_current_user)):
 
 # ─── Upload & AI Pipeline (Background Task) ──────────────────────────────────
 
+async def _process_single_chunk(chunk: str, pack_id: str, job_id: str) -> list:
+    """Extract concepts + checks from one chunk and persist to DB."""
+    extracted = await extract_concepts_from_chunk(chunk)
+    saved = []
+    for concept_data in extracted:
+        concept_doc = {
+            "study_pack_id": pack_id,
+            "title": concept_data.get("concept_title", concept_data.get("title", "Unknown")),
+            "short_definition": concept_data.get("short_definition", ""),
+            "common_mistake": concept_data.get("common_mistake", ""),
+            "exam_weight": 1.0,
+            "exam_weight_label": "medium",
+            "prerequisite_concepts": concept_data.get("prerequisite_concepts", []),
+            "created_at": datetime.now(timezone.utc),
+        }
+        c_result = await concepts_col.insert_one(concept_doc)
+        concept_id = str(c_result.inserted_id)
+
+        raw_checks = await generate_checks_for_concept(concept_data)
+        if raw_checks:
+            approved_checks = await quality_filter_checks(raw_checks)
+            for chk in approved_checks:
+                raw_reqs = chk.get("answer_requirements", {})
+                if isinstance(raw_reqs, dict):
+                    normalized_reqs = raw_reqs
+                elif isinstance(raw_reqs, list):
+                    normalized_reqs = {"required_ideas": raw_reqs, "wrong_statements": []}
+                else:
+                    normalized_reqs = {"required_ideas": [], "wrong_statements": []}
+                await checks_col.insert_one({
+                    "concept_id": concept_id,
+                    "type": chk.get("type", "recall"),
+                    "prompt": chk.get("prompt", ""),
+                    "expected_answer": chk.get("expected_answer", ""),
+                    "explanation": chk.get("short_explanation", chk.get("explanation", "")),
+                    "difficulty_hint": "medium",
+                    "answer_requirements": normalized_reqs,
+                })
+
+        concept_doc["id"] = concept_id
+        concept_doc.pop("_id", None)
+        concept_doc["created_at"] = concept_doc["created_at"].isoformat()
+        saved.append(concept_doc)
+
+    # Update live progress counters
+    if saved:
+        await jobs_col.update_one(
+            {"_id": ObjectId(job_id)},
+            {"$inc": {"chunks_processed": 1, "concepts_extracted": len(saved)}}
+        )
+    return saved
+
+
 async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
-    """Background task: extract concepts + checks, update job status."""
+    """Background task: extract concepts + checks from ALL chunks (no hard limit).
+    Up to 2 chunks processed in parallel to balance speed vs. API rate limits.
+    """
     try:
         await jobs_col.update_one(
             {"_id": ObjectId(job_id)},
@@ -745,55 +824,21 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
             )
             return
 
+        # Process all chunks, 2 at a time
+        semaphore = asyncio.Semaphore(2)
+
+        async def bounded(chunk):
+            async with semaphore:
+                return await _process_single_chunk(chunk, pack_id, job_id)
+
+        results = await asyncio.gather(*[bounded(c) for c in chunks], return_exceptions=True)
+
         saved_concepts = []
-        for chunk in chunks[:6]:
-            extracted = await extract_concepts_from_chunk(chunk)
-            for concept_data in extracted:
-                if len(saved_concepts) >= 15:
-                    break
-
-                concept_doc = {
-                    "study_pack_id": pack_id,
-                    "title": concept_data.get("concept_title", concept_data.get("title", "Unknown")),
-                    "short_definition": concept_data.get("short_definition", ""),
-                    "common_mistake": concept_data.get("common_mistake", ""),
-                    "exam_weight": 1.0,
-                    "exam_weight_label": "medium",
-                    "prerequisite_concepts": concept_data.get("prerequisite_concepts", []),
-                    "created_at": datetime.now(timezone.utc),
-                }
-                c_result = await concepts_col.insert_one(concept_doc)
-                concept_id = str(c_result.inserted_id)
-
-                raw_checks = await generate_checks_for_concept(concept_data)
-                if raw_checks:
-                    approved_checks = await quality_filter_checks(raw_checks)
-                    for chk in approved_checks:
-                        raw_reqs = chk.get("answer_requirements", {})
-                        # Normalize: LLM may return a flat list instead of the expected dict
-                        if isinstance(raw_reqs, dict):
-                            normalized_reqs = raw_reqs
-                        elif isinstance(raw_reqs, list):
-                            normalized_reqs = {"required_ideas": raw_reqs, "wrong_statements": []}
-                        else:
-                            normalized_reqs = {"required_ideas": [], "wrong_statements": []}
-                        await checks_col.insert_one({
-                            "concept_id": concept_id,
-                            "type": chk.get("type", "recall"),
-                            "prompt": chk.get("prompt", ""),
-                            "expected_answer": chk.get("expected_answer", ""),
-                            "explanation": chk.get("short_explanation", chk.get("explanation", "")),
-                            "difficulty_hint": "medium",
-                            "answer_requirements": normalized_reqs,
-                        })
-
-                concept_doc["id"] = concept_id
-                concept_doc.pop("_id", None)
-                concept_doc["created_at"] = concept_doc["created_at"].isoformat()
-                saved_concepts.append(concept_doc)
-
-            if len(saved_concepts) >= 15:
-                break
+        for res in results:
+            if isinstance(res, list):
+                saved_concepts.extend(res)
+            elif isinstance(res, Exception):
+                logger.warning(f"Chunk processing error: {res}")
 
         total_concepts = await concepts_col.count_documents({"study_pack_id": pack_id})
         await packs_col.update_one(
@@ -807,17 +852,13 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str):
                 {"$set": {"status": "failed", "error": "No concepts could be extracted. Try more detailed content."}}
             )
         else:
-            # Build risk summary: aggregate common_mistakes — no AI, pure data
             risk_summary = []
             seen = set()
             for c in saved_concepts:
                 mistake = c.get("common_mistake", "").strip()
                 title = c.get("title", "")
                 if mistake and title and title not in seen:
-                    risk_summary.append({
-                        "concept": title,
-                        "misconception": mistake,
-                    })
+                    risk_summary.append({"concept": title, "misconception": mistake})
                     seen.add(title)
 
             await jobs_col.update_one(
@@ -858,7 +899,10 @@ async def upload_material(
     if file and file.filename:
         content = await file.read()
         if file.filename.lower().endswith(".pdf"):
-            raw_text = extract_text_from_pdf(content)
+            try:
+                raw_text = await asyncio.to_thread(_extract_text_from_pdf_sync, content)
+            except RuntimeError as e:
+                raise HTTPException(status_code=400, detail=str(e))
         else:
             raw_text = content.decode("utf-8", errors="ignore")
     elif text:
@@ -903,6 +947,78 @@ async def get_job_status(job_id: str, user=Depends(get_current_user)):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return doc_id(job)
+
+
+# ─── Chunked Upload Endpoints ─────────────────────────────────────────────────
+
+@app.post("/api/upload/chunk")
+async def receive_chunk(req: UploadChunkRequest, user=Depends(get_current_user)):
+    """Receive one chunk of a multi-part file upload."""
+    upload_dir = os.path.join(UPLOAD_TEMP_DIR, req.upload_id)
+    os.makedirs(upload_dir, exist_ok=True)
+    chunk_path = os.path.join(upload_dir, f"chunk_{req.chunk_index:05d}.bin")
+    chunk_data = base64.b64decode(req.data)
+    with open(chunk_path, "wb") as f:
+        f.write(chunk_data)
+    return {"received": req.chunk_index, "upload_id": req.upload_id}
+
+
+@app.post("/api/upload/finalize")
+async def finalize_upload(
+    req: FinalizeUploadRequest,
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user),
+):
+    """Assemble uploaded chunks, extract text, and start the AI pipeline."""
+    try:
+        pack = await packs_col.find_one({"_id": ObjectId(req.pack_id), "owner_id": str(user["_id"])})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid pack ID")
+    if not pack:
+        raise HTTPException(status_code=404, detail="Pack not found")
+
+    upload_dir = os.path.join(UPLOAD_TEMP_DIR, req.upload_id)
+    if not os.path.exists(upload_dir):
+        raise HTTPException(status_code=400, detail="Upload session not found — please retry")
+
+    chunk_files = sorted(f for f in os.listdir(upload_dir) if f.startswith("chunk_"))
+    if not chunk_files:
+        raise HTTPException(status_code=400, detail="No chunks received")
+
+    # Assemble
+    assembled = b"".join(
+        open(os.path.join(upload_dir, cf), "rb").read() for cf in chunk_files
+    )
+    shutil.rmtree(upload_dir, ignore_errors=True)  # clean up temp files
+
+    # Extract text
+    try:
+        if req.filename.lower().endswith(".pdf"):
+            raw_text = await asyncio.to_thread(_extract_text_from_pdf_sync, assembled)
+        else:
+            raw_text = assembled.decode("utf-8", errors="ignore")
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not raw_text.strip():
+        raise HTTPException(status_code=400, detail="No text content found in file")
+
+    job_doc = {
+        "pack_id": req.pack_id,
+        "user_id": str(user["_id"]),
+        "status": "queued",
+        "created_at": datetime.now(timezone.utc),
+        "started_at": None,
+        "completed_at": None,
+        "concepts_extracted": 0,
+        "chunks_processed": 0,
+        "concepts": [],
+        "error": None,
+    }
+    result = await jobs_col.insert_one(job_doc)
+    job_id = str(result.inserted_id)
+    background_tasks.add_task(_run_ai_pipeline, job_id, req.pack_id, raw_text)
+    return {"job_id": job_id, "status": "queued"}
 
 
 # ─── Concept Routes ───────────────────────────────────────────────────────────
@@ -1466,7 +1582,7 @@ async def evaluate_answer(req: EvaluateAnswerRequest, user=Depends(get_current_u
     # Deterministic result classification — no LLM judgment
     if wrong_stated:
         result = "incorrect"
-        summary = f"Incorrect statement detected — key distinction missing."
+        summary = "Incorrect statement detected — key distinction missing."
     elif len(missing) == 0:
         result = "correct"
         summary = "All key ideas covered."

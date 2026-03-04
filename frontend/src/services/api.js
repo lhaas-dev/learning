@@ -54,6 +54,13 @@ export const startDrillSession = (conceptIds) =>
 export const evaluateAnswer = (checkId, userAnswer) =>
   api.post('/api/checks/evaluate', { check_id: checkId, user_answer: userAnswer });
 
+// Chunked PDF Upload
+export const uploadChunk = (data) =>
+  api.post('/api/upload/chunk', data);
+
+export const finalizeUpload = (data) =>
+  api.post('/api/upload/finalize', data);
+
 // Dashboard
 export const getDashboardOverview = () => api.get('/api/dashboard/overview');
 

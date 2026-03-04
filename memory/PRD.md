@@ -88,7 +88,10 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 - [x] Session page (question reveal, rating buttons, micro-fix panel)
 - [x] Session Debrief screen (Top Knowledge Risks, Dominant Pattern, 5-Min Fix Drill CTA)
 - [x] Drill session flow (navigates to active session targeting weak concepts)
-- [x] EvaluationPanel — full assisted self-assessment UI per spec (Feb 2026):
+- [x] PDF upload via chunked upload (POST /api/upload/chunk + /api/upload/finalize) — no proxy size limit, progress bar
+- [x] No concept limit — all chunks processed, all concepts extracted (tested: 526 concepts from 5.9MB WuG PDF)
+- [x] Pipeline parallelized: 2 chunks concurrently with asyncio.Semaphore
+- [x] asyncio.to_thread for LLM calls — server stays responsive during AI processing
   - Block 1: "Correct answer (core idea)" — bold core answer + collapsible explanation
   - Block 2: "What we understood from your answer" — extracted_claims bullet list, always visible for non-scenario
   - Block 3: "Missing or incorrect ideas" — "Missing key ideas:" list or "All required core ideas were addressed."

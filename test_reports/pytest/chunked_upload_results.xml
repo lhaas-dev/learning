@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="14" skipped="0" tests="14" time="843.135" timestamp="2026-03-04T09:33:46.708293+00:00" hostname="agent-env-70aeee93-026e-4fd2-8cbd-dd9ceec485ec"><testcase classname="backend.tests.test_chunked_upload.TestAuthSetup" name="test_login" time="60.206"><failure message="AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_chunked_upload.py:46: in test_login
+    assert r.status_code == 200, f"Login failed: {r.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestPackSetup" name="test_create_pack_for_upload" time="60.237"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:60: in test_create_pack_for_upload
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestChunkUpload" name="test_chunk_endpoint_requires_auth" time="60.174"><failure message="AssertionError: Expected 401/403, got 502&#10;assert 502 in [401, 403]&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_chunked_upload.py:86: in test_chunk_endpoint_requires_auth
+    assert r.status_code in [401, 403], f"Expected 401/403, got {r.status_code}"
+E   AssertionError: Expected 401/403, got 502
+E   assert 502 in [401, 403]
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestChunkUpload" name="test_upload_single_chunk" time="60.216"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:91: in test_upload_single_chunk
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestChunkUpload" name="test_upload_multiple_chunks_in_sequence" time="60.220"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:113: in test_upload_multiple_chunks_in_sequence
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestChunkUpload" name="test_chunk_with_invalid_base64" time="60.169"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:135: in test_chunk_with_invalid_base64
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestFinalizeUpload" name="test_finalize_requires_auth" time="60.199"><failure message="AssertionError: Expected 401/403, got 502&#10;assert 502 in [401, 403]&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_chunked_upload.py:159: in test_finalize_requires_auth
+    assert r.status_code in [401, 403], f"Expected 401/403, got {r.status_code}"
+E   AssertionError: Expected 401/403, got 502
+E   assert 502 in [401, 403]
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestFinalizeUpload" name="test_finalize_missing_upload" time="60.197"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:164: in test_finalize_missing_upload
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestFinalizeUpload" name="test_txt_chunked_upload_and_finalize" time="60.232"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:183: in test_txt_chunked_upload_and_finalize
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestFinalizeUpload" name="test_job_status_after_finalize" time="60.200"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:228: in test_job_status_after_finalize
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestPdfChunkedUpload" name="test_pdf_chunked_upload_and_finalize" time="60.191"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:254: in test_pdf_chunked_upload_and_finalize
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestPdfChunkedUpload" name="test_pdf_job_initial_status" time="60.218"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:305: in test_pdf_job_initial_status
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestPdfChunkedUpload" name="test_pdf_job_progresses_over_time" time="60.244"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:324: in test_pdf_job_progresses_over_time
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase><testcase classname="backend.tests.test_chunked_upload.TestExistingJob" name="test_check_previous_pdf_job" time="60.233"><failure message="AssertionError: No auth token&#10;assert {}">backend/tests/test_chunked_upload.py:385: in test_check_previous_pdf_job
+    assert headers, "No auth token"
+E   AssertionError: No auth token
+E   assert {}</failure></testcase></testsuite></testsuites>
