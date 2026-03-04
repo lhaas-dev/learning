@@ -8,7 +8,7 @@ import {
   Plus, Tag
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { uploadMaterial, getJobStatus, deleteConcept, uploadChunk, finalizeUpload, uploadFromUrl } from '../services/api';
+import { uploadMaterial, getJobStatus, deleteConcept, uploadChunk, finalizeUpload, uploadFromUrl, streamJobProgress } from '../services/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function arrayBufferToBase64(buffer) {
@@ -84,44 +84,53 @@ function ConceptPreviewCard({ concept, onDelete }) {
   );
 }
 
-// ─── Single job tracker (used for primary + extras) ───────────────────────────
+// ─── Single job tracker — SSE-powered real-time progress ─────────────────────
 function JobTracker({ jobId, label, onComplete }) {
   const [status, setStatus] = useState('queued');
+  const [chunksProcessed, setChunksProcessed] = useState(0);
+  const [chunksTotal, setChunksTotal] = useState(0);
   const [concepts, setConcepts] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [docType, setDocType] = useState('');
-  const pollRef = useRef(null);
   const timerRef = useRef(null);
+  const esRef = useRef(null);
 
   useEffect(() => {
     timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await getJobStatus(jobId);
-        const job = res.data;
-        setStatus(job.status);
-        setConcepts(job.concepts_extracted || 0);
-        if (job.doc_type) setDocType(job.doc_type);
-        if (job.status === 'complete') {
-          clearInterval(pollRef.current);
-          clearInterval(timerRef.current);
-          onComplete(job);
-        } else if (job.status === 'failed') {
-          clearInterval(pollRef.current);
-          clearInterval(timerRef.current);
-          toast.error(`${label}: ${job.error || 'Verarbeitung fehlgeschlagen'}`);
-          onComplete(null);
-        }
-      } catch { /* keep polling */ }
-    }, 4000);
-    return () => { clearInterval(pollRef.current); clearInterval(timerRef.current); };
+
+    esRef.current = streamJobProgress(
+      jobId,
+      (data) => {
+        if (data.status) setStatus(data.status);
+        if (data.chunks_processed !== undefined) setChunksProcessed(data.chunks_processed);
+        if (data.chunks_total) setChunksTotal(data.chunks_total);
+        if (data.concepts_extracted !== undefined) setConcepts(data.concepts_extracted);
+        if (data.doc_type) setDocType(data.doc_type);
+      },
+      (finalData) => {
+        clearInterval(timerRef.current);
+        // Fallback to polling for final job data with concepts array
+        getJobStatus(jobId).then(res => onComplete(res.data)).catch(() => onComplete(finalData));
+      }
+    );
+
+    return () => {
+      clearInterval(timerRef.current);
+      if (esRef.current) esRef.current.close();
+    };
   }, [jobId]);
 
   const isRunning = status === 'queued' || status === 'processing';
-  const statusColor = status === 'complete' ? '#00C853' : status === 'failed' ? '#FF2D55' : '#2F81F7';
+  const pct = chunksTotal > 0 ? Math.round((chunksProcessed / chunksTotal) * 100) : 0;
+
+  // Estimate remaining time: ~45s per chunk with Haiku (vs ~76s before)
+  const avgSecsPerChunk = 45;
+  const remainingChunks = chunksTotal > 0 ? chunksTotal - chunksProcessed : 0;
+  const estMinutes = Math.ceil((remainingChunks * avgSecsPerChunk) / 60);
 
   return (
-    <div className="glass-card p-3 border border-white/5" data-testid={`job-tracker-${jobId}`}>
+    <div className="glass-card p-4 border border-white/5 space-y-3" data-testid={`job-tracker-${jobId}`}>
+      {/* Header row */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           {isRunning
@@ -132,25 +141,58 @@ function JobTracker({ jobId, label, onComplete }) {
           <span className="text-xs font-mono text-text-secondary truncate">{label}</span>
           {docType && <DocTypeBadge type={docType} />}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-3 flex-shrink-0 text-xs font-mono">
           {concepts > 0 && (
-            <span className="text-xs font-mono" style={{ color: statusColor }}>
-              {concepts} Konzepte
-            </span>
+            <span className="text-brand-primary">{concepts} Konzepte</span>
           )}
-          {isRunning && (
-            <span className="text-xs font-mono text-text-muted">{elapsed}s</span>
+          {isRunning && elapsed > 0 && (
+            <span className="text-text-muted">{elapsed}s</span>
           )}
         </div>
       </div>
+
+      {/* Progress bar + chunk status */}
       {isRunning && (
-        <div className="mt-2 h-0.5 bg-white/10 rounded-full overflow-hidden">
-          <motion.div
-            className="h-full bg-brand-primary rounded-full"
-            animate={{ width: ['20%', '80%', '20%'] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-          />
+        <div className="space-y-1.5">
+          {chunksTotal > 0 ? (
+            <>
+              <div className="flex justify-between text-[10px] font-mono text-text-muted">
+                <span>
+                  {chunksProcessed === 0
+                    ? 'Starte Verarbeitung...'
+                    : `Kapitel ${chunksProcessed}/${chunksTotal} verarbeitet`}
+                </span>
+                <span>
+                  {remainingChunks > 0 && estMinutes > 0
+                    ? `~${estMinutes} Min verbleibend`
+                    : chunksProcessed > 0 ? 'Fast fertig...' : ''}
+                </span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-brand-primary rounded-full"
+                  animate={{ width: `${Math.max(pct, 3)}%` }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-brand-primary rounded-full"
+                animate={{ width: ['5%', '60%', '5%'] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            </div>
+          )}
         </div>
+      )}
+
+      {/* "You can close the app" hint after first chunk */}
+      {isRunning && chunksProcessed >= 1 && (
+        <p className="text-[10px] font-mono text-text-muted">
+          Du kannst die App schliessen — die Verarbeitung läuft im Hintergrund weiter.
+        </p>
       )}
     </div>
   );
@@ -502,6 +544,29 @@ export default function Upload() {
                   Weiteres hinzufügen
                 </button>
               </div>
+
+              {/* Quality report (shown when available) */}
+              {completedJobs[0]?.quality_report && (() => {
+                const qr = completedJobs[0].quality_report;
+                return (
+                  <div className="pt-2 border-t border-white/5 grid grid-cols-3 gap-3" data-testid="quality-report">
+                    <div className="text-center">
+                      <div className="text-xs font-mono text-brand-primary font-bold">{qr.chunks_total}</div>
+                      <div className="text-[10px] font-mono text-text-muted">Chunks</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs font-mono text-brand-primary font-bold">{qr.avg_concepts_per_chunk}</div>
+                      <div className="text-[10px] font-mono text-text-muted">Konzepte/Chunk</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs font-mono font-bold" style={{ color: qr.duplicates_merged > 0 ? '#00C853' : '#8B949E' }}>
+                        {qr.duplicates_merged}
+                      </div>
+                      <div className="text-[10px] font-mono text-text-muted">Duplikate entfernt</div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Doc type badges per source */}
               {completedJobs.length > 0 && (

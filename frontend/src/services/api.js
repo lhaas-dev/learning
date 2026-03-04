@@ -35,6 +35,27 @@ export const uploadMaterial = (packId, formData) =>
 
 export const getJobStatus = (jobId) => api.get(`/api/jobs/${jobId}`);
 
+export const streamJobProgress = (jobId, onProgress, onDone) => {
+  const token = localStorage.getItem('km_token');
+  const url = `${BASE_URL}/api/jobs/${jobId}/stream?token=${encodeURIComponent(token)}`;
+  const es = new EventSource(url);
+  es.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.status === 'stream_end') { es.close(); onDone(null); return; }
+      if (data.status === 'complete' || data.status === 'failed') {
+        onProgress(data);
+        es.close();
+        onDone(data);
+      } else {
+        onProgress(data);
+      }
+    } catch { /* ignore parse errors */ }
+  };
+  es.onerror = () => { es.close(); onDone(null); };
+  return es; // caller can close it
+};
+
 // Concepts
 export const listConcepts = (packId) => api.get(`/api/packs/${packId}/concepts`);
 export const updateConcept = (conceptId, data) => api.patch(`/api/concepts/${conceptId}`, data);

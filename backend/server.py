@@ -103,20 +103,38 @@ def doc_id(doc: dict) -> dict:
 
 
 # ─── Chunking ─────────────────────────────────────────────────────────────────
-def chunk_text(text: str, max_words: int = 500) -> list:
-    """Split text into 300-600 word chunks at paragraph boundaries."""
-    paragraphs = re.split(r'\n{2,}', text.strip())
+def chunk_text(text: str, target_words: int = 800, overlap_words: int = 100) -> list:
+    """
+    Split text into ~800-word chunks at paragraph boundaries.
+    Adds a 100-word overlap window from the previous chunk so concepts
+    that span a chunk boundary are fully visible in at least one chunk.
+    """
+    paragraphs = [p.strip() for p in re.split(r'\n{2,}', text.strip()) if p.strip()]
     chunks = []
-    current: list = []
+    current: list[str] = []
     current_words = 0
+    overlap_tail: list[str] = []  # last overlap_words words from the previous chunk
+
+    def finalize_chunk():
+        nonlocal overlap_tail
+        text_body = "\n\n".join(current)
+        # Prepend overlap from previous chunk for context
+        if overlap_tail:
+            full = " ".join(overlap_tail) + "\n\n" + text_body
+        else:
+            full = text_body
+        chunks.append(full)
+        # Save the tail of the current body (not the overlap prefix) for next chunk
+        body_words = text_body.split()
+        overlap_tail = body_words[-overlap_words:] if len(body_words) >= overlap_words else body_words
 
     for para in paragraphs:
         para = para.strip()
         if not para:
             continue
         words = len(para.split())
-        if current_words + words > max_words and current:
-            chunks.append("\n\n".join(current))
+        if current_words + words > target_words and current:
+            finalize_chunk()
             current = [para]
             current_words = words
         else:
@@ -124,9 +142,9 @@ def chunk_text(text: str, max_words: int = 500) -> list:
             current_words += words
 
     if current:
-        chunks.append("\n\n".join(current))
+        finalize_chunk()
 
-    return [c for c in chunks if len(c.split()) > 30]
+    return [c for c in chunks if len(c.split()) > 50]
 
 
 def _extract_text_from_pdf_sync(pdf_bytes: bytes) -> str:
@@ -197,7 +215,7 @@ Document sample:
 
 Return ONLY valid JSON: {{"type": "Theoriebuch"}}"""
     try:
-        response = await call_claude(system, prompt)
+        response = await call_haiku(system, prompt)
         return extract_json(response).get("type", "Sonstiges")
     except Exception:
         return "Sonstiges"
@@ -218,21 +236,34 @@ RAG_CONSTRAINT = (
 )
 
 
-async def call_claude(system_message: str, user_text: str) -> str:
-    def _blocking_call():
-        """Run the LLM call in a thread to avoid blocking the event loop."""
+def _make_blocking_call(model_provider: str, model_name: str, system_message: str, user_text: str):
+    """Sync LLM call — safe to run via asyncio.to_thread."""
+    def _call():
         loop = asyncio.new_event_loop()
         try:
             chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
                 session_id=str(uuid.uuid4()),
                 system_message=system_message,
-            ).with_model("anthropic", "claude-sonnet-4-6")
+            ).with_model(model_provider, model_name)
             return loop.run_until_complete(chat.send_message(UserMessage(text=user_text)))
         finally:
             loop.close()
+    return _call
 
-    return await asyncio.to_thread(_blocking_call)
+
+async def call_claude(system_message: str, user_text: str) -> str:
+    """Sonnet — used for quality-critical tasks (check generation, merging)."""
+    return await asyncio.to_thread(
+        _make_blocking_call("anthropic", "claude-sonnet-4-6", system_message, user_text)
+    )
+
+
+async def call_haiku(system_message: str, user_text: str) -> str:
+    """Haiku — used for fast extraction tasks (concept extraction, quality filter, doc type)."""
+    return await asyncio.to_thread(
+        _make_blocking_call("anthropic", "claude-haiku-4-6", system_message, user_text)
+    )
 
 
 def extract_json(text: str) -> Any:
@@ -273,7 +304,7 @@ Study material:
 Return the result as a JSON array. Return ONLY valid JSON, no other text."""
 
     try:
-        response = await call_claude(system, prompt)
+        response = await call_haiku(system, prompt)  # Fast model: extraction only
         if "INSUFFICIENT SOURCE INFORMATION" in response:
             return []
         data = extract_json(response)
@@ -369,7 +400,7 @@ Questions:
 Return the result as JSON array. Return ONLY valid JSON, no other text."""
 
     try:
-        response = await call_claude(system, prompt)
+        response = await call_haiku(system, prompt)  # Fast model: quality filter is mechanical
         results = extract_json(response)
         approved = []
         for i, result in enumerate(results):
@@ -872,6 +903,98 @@ async def _process_single_chunk(chunk: str, pack_id: str, job_id: str,
     return saved
 
 
+async def _merge_similar_concepts(pack_id: str) -> dict:
+    """
+    Conservative post-processing deduplication.
+    Finds concept pairs with 2+ overlapping title keywords and asks the LLM
+    whether they are truly the same idea or just related.
+    Rule: MERGE only if identical core idea. When in doubt: KEEP_BOTH.
+    """
+    def key_words(title: str) -> set:
+        stop = {
+            'die', 'der', 'das', 'ein', 'eine', 'und', 'von', 'des', 'dem', 'den',
+            'the', 'of', 'and', 'a', 'an', 'in', 'für', 'vs', 'im', 'bei', 'als',
+            'zum', 'zur', 'nach', 'über', 'unter', 'bei', 'mit',
+        }
+        return {w.lower() for w in re.findall(r'\b\w{4,}\b', title) if w.lower() not in stop}
+
+    all_concepts = []
+    async for c in concepts_col.find({"study_pack_id": pack_id}, {"_id": 1, "title": 1, "short_definition": 1}):
+        all_concepts.append(c)
+
+    if len(all_concepts) < 2:
+        return {"checked": 0, "merged": 0}
+
+    # Find candidate pairs with 2+ shared meaningful title words
+    candidate_pairs = []
+    for i in range(len(all_concepts)):
+        for j in range(i + 1, len(all_concepts)):
+            k1 = key_words(all_concepts[i].get('title', ''))
+            k2 = key_words(all_concepts[j].get('title', ''))
+            if k1 and k2 and len(k1 & k2) >= 2:
+                candidate_pairs.append((all_concepts[i], all_concepts[j]))
+
+    if not candidate_pairs:
+        return {"checked": 0, "merged": 0}
+
+    to_delete: set = set()
+    merged_count = 0
+    BATCH_SIZE = 15
+
+    for start in range(0, len(candidate_pairs), BATCH_SIZE):
+        batch = [
+            (c1, c2) for c1, c2 in candidate_pairs[start:start + BATCH_SIZE]
+            if str(c1['_id']) not in to_delete and str(c2['_id']) not in to_delete
+        ]
+        if not batch:
+            continue
+
+        pairs_text = "\n".join([
+            f"Pair {i + 1}:\n  A: \"{c1['title']}\" — {c1.get('short_definition', '')[:120]}\n"
+            f"  B: \"{c2['title']}\" — {c2.get('short_definition', '')[:120]}"
+            for i, (c1, c2) in enumerate(batch)
+        ])
+
+        system = "You are a concept deduplication assistant. Be conservative."
+        prompt = f"""Review each pair of learning concepts and decide whether to merge them.
+
+STRICT RULE: Only mark MERGE if A and B express the EXACT same core idea in different words.
+If they are related, sequential, or complementary — mark KEEP_BOTH.
+When in doubt: KEEP_BOTH. Granularity is valuable for learners.
+
+{pairs_text}
+
+Return ONLY valid JSON array:
+[{{"pair": 1, "decision": "MERGE", "keep": "A"}}, {{"pair": 2, "decision": "KEEP_BOTH"}}]
+decision must be "MERGE" or "KEEP_BOTH". keep must be "A" or "B" (only when MERGE)."""
+
+        try:
+            response = await call_haiku(system, prompt)  # Merge decisions are mechanical
+            decisions = extract_json(response)
+            for d in decisions:
+                idx = d.get("pair", 0) - 1
+                if idx < 0 or idx >= len(batch):
+                    continue
+                if d.get("decision") == "MERGE":
+                    c1, c2 = batch[idx]
+                    keep = d.get("keep", "A")
+                    delete_id = str(c2["_id"]) if keep == "A" else str(c1["_id"])
+                    if delete_id not in to_delete:
+                        to_delete.add(delete_id)
+                        merged_count += 1
+        except Exception as e:
+            logger.warning(f"Merge batch failed: {e}")
+
+    for cid in to_delete:
+        try:
+            await concepts_col.delete_one({"_id": ObjectId(cid)})
+            await checks_col.delete_many({"concept_id": cid})
+        except Exception as e:
+            logger.warning(f"Delete duplicate concept {cid}: {e}")
+
+    return {"checked": len(candidate_pairs), "merged": merged_count}
+
+
 async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str,
                            source_name: str = "", doc_type: str = ""):
     """Background task: extract concepts + checks from ALL chunks (no hard limit).
@@ -900,8 +1023,14 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str,
             )
             return
 
-        # Process all chunks, 2 at a time
-        semaphore = asyncio.Semaphore(2)
+        # Store total chunk count upfront so SSE can show "Chunk X / N"
+        await jobs_col.update_one(
+            {"_id": ObjectId(job_id)},
+            {"$set": {"chunks_total": len(chunks)}}
+        )
+
+        # Process all chunks, 3 at a time (Haiku on extraction = more headroom vs rate limits)
+        semaphore = asyncio.Semaphore(3)
 
         async def bounded(chunk):
             async with semaphore:
@@ -916,13 +1045,20 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str,
             elif isinstance(res, Exception):
                 logger.warning(f"Chunk processing error: {res}")
 
+        concepts_before_merge = len(saved_concepts)
+        avg_per_chunk = round(concepts_before_merge / len(chunks), 2) if chunks else 0
+
+        # ── Merge step: remove true duplicates (conservative) ──
+        merge_stats = await _merge_similar_concepts(pack_id)
+        concepts_after_merge = concepts_before_merge - merge_stats["merged"]
+
         total_concepts = await concepts_col.count_documents({"study_pack_id": pack_id})
         await packs_col.update_one(
             {"_id": ObjectId(pack_id)},
             {"$set": {"concept_count": total_concepts}}
         )
 
-        if not saved_concepts:
+        if concepts_after_merge == 0:
             await jobs_col.update_one(
                 {"_id": ObjectId(job_id)},
                 {"$set": {"status": "failed", "error": "No concepts could be extracted. Try more detailed content."}}
@@ -942,10 +1078,19 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str,
                 {"$set": {
                     "status": "complete",
                     "completed_at": datetime.now(timezone.utc),
-                    "concepts_extracted": len(saved_concepts),
+                    "concepts_extracted": concepts_after_merge,
                     "chunks_processed": len(chunks),
                     "concepts": saved_concepts,
                     "risk_summary": risk_summary[:5],
+                    # ── Before/After quality report ──
+                    "quality_report": {
+                        "chunks_total": len(chunks),
+                        "concepts_before_merge": concepts_before_merge,
+                        "concepts_after_merge": concepts_after_merge,
+                        "duplicates_merged": merge_stats["merged"],
+                        "duplicate_pairs_checked": merge_stats["checked"],
+                        "avg_concepts_per_chunk": avg_per_chunk,
+                    },
                 }}
             )
     except Exception as e:
@@ -1028,6 +1173,65 @@ async def get_job_status(job_id: str, user=Depends(get_current_user)):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return doc_id(job)
+
+
+@app.get("/api/jobs/{job_id}/stream")
+async def stream_job_progress(job_id: str, token: str):
+    """Server-Sent Events stream for real-time job progress."""
+    from fastapi.responses import StreamingResponse
+
+    # Validate token manually (SSE can't use Depends for auth)
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise ValueError("Invalid token")
+    except Exception:
+        async def _err():
+            yield "data: {\"error\": \"unauthorized\"}\n\n"
+        return StreamingResponse(_err(), media_type="text/event-stream")
+
+    async def _event_generator():
+        last_state = None
+        for _ in range(300):  # max ~10 min (2s × 300)
+            try:
+                job = await jobs_col.find_one(
+                    {"_id": ObjectId(job_id), "user_id": user_id},
+                    {"status": 1, "chunks_processed": 1, "chunks_total": 1,
+                     "concepts_extracted": 1, "doc_type": 1, "quality_report": 1, "error": 1}
+                )
+                if not job:
+                    break
+
+                state = {
+                    "status": job.get("status"),
+                    "chunks_processed": job.get("chunks_processed", 0),
+                    "chunks_total": job.get("chunks_total", 0),
+                    "concepts_extracted": job.get("concepts_extracted", 0),
+                    "doc_type": job.get("doc_type", ""),
+                    "quality_report": job.get("quality_report"),
+                    "error": job.get("error"),
+                }
+
+                if state != last_state:
+                    yield f"data: {json.dumps(state)}\n\n"
+                    last_state = state
+
+                if state["status"] in ("complete", "failed"):
+                    break
+
+                await asyncio.sleep(2)
+            except Exception as e:
+                logger.warning(f"SSE error: {e}")
+                break
+
+        yield "data: {\"status\": \"stream_end\"}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ─── Chunked Upload Endpoints ─────────────────────────────────────────────────
