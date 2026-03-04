@@ -192,10 +192,10 @@ def extract_json(text: str) -> Any:
 
 
 async def extract_concepts_from_chunk(chunk: str) -> list:
-    system = f"You are an expert university-level educator. {RAG_CONSTRAINT}"
-    prompt = f"""You are an expert university-level educator.
+    system = f"You are an expert educator. {RAG_CONSTRAINT}"
+    prompt = f"""You are an expert educator extracting LEARNABLE CONCEPTS from study material.
 
-Your task is to extract LEARNABLE CONCEPTS from the following study material.
+CRITICAL: Respond in the SAME LANGUAGE as the study material below. If the material is in German, all output must be in German. If English, use English.
 
 Rules:
 - A concept must be testable.
@@ -206,9 +206,9 @@ Rules:
 - Do NOT include meta-topics (e.g. "introduction", "overview").
 
 For each concept, return:
-1. concept_title (max 6 words)
-2. short_definition (1-2 sentences)
-3. common_mistake (typical student misconception)
+1. concept_title (max 6 words, same language as material)
+2. short_definition (1-2 sentences, same language as material)
+3. common_mistake (typical student misconception, same language as material)
 4. prerequisite_concepts (list, empty if none are obvious)
 
 Study material:
@@ -230,12 +230,17 @@ Return the result as a JSON array. Return ONLY valid JSON, no other text."""
 
 
 async def generate_checks_for_concept(concept: dict) -> list:
-    system = f"You are generating exam-oriented knowledge checks for a university student. {RAG_CONSTRAINT}"
-    prompt = f"""You are generating exam-oriented knowledge checks for a university student.
+    system = f"You are generating exam-oriented knowledge checks for a student. {RAG_CONSTRAINT}"
+    # Detect language from concept content — respond in the same language
+    concept_title = concept.get('concept_title', concept.get('title', ''))
+    concept_def = concept.get('short_definition', '')
+    prompt = f"""You are generating exam-oriented knowledge checks for a student.
+
+CRITICAL: Respond in the SAME LANGUAGE as the concept below. If German, all output must be in German. If English, use English.
 
 Concept:
-Title: {concept.get('concept_title', concept.get('title', ''))}
-Definition: {concept.get('short_definition', '')}
+Title: {concept_title}
+Definition: {concept_def}
 Common mistake: {concept.get('common_mistake', '')}
 
 Generate EXACTLY 4 checks:
@@ -252,6 +257,7 @@ Rules:
 - short_explanation is 1-2 sentences of additional context only.
 - Do not include trick questions.
 - Assume exam pressure and time constraints.
+- All text (prompt, expected_answer, short_explanation, required_ideas, wrong_statements) must be in the same language as the concept.
 
 For each check, return:
 - type (recall | contrast | scenario | error)
@@ -281,6 +287,8 @@ async def quality_filter_checks(checks: list) -> list:
 
     system = "You are reviewing automatically generated study questions."
     prompt = f"""You are reviewing automatically generated study questions.
+
+IMPORTANT: Respond in the same language as the questions below.
 
 For each question, decide one of:
 - KEEP
