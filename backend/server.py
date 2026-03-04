@@ -151,13 +151,23 @@ RAG_CONSTRAINT = (
 
 
 async def call_claude(system_message: str, user_text: str) -> str:
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=str(uuid.uuid4()),
-        system_message=system_message,
-    ).with_model("anthropic", "claude-sonnet-4-6")
-    response = await chat.send_message(UserMessage(text=user_text))
-    return response
+    import asyncio
+
+    def _blocking_call():
+        """Run the LLM call in a thread to avoid blocking the event loop."""
+        import asyncio as _asyncio
+        loop = _asyncio.new_event_loop()
+        try:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=str(uuid.uuid4()),
+                system_message=system_message,
+            ).with_model("anthropic", "claude-sonnet-4-6")
+            return loop.run_until_complete(chat.send_message(UserMessage(text=user_text)))
+        finally:
+            loop.close()
+
+    return await asyncio.to_thread(_blocking_call)
 
 
 def extract_json(text: str) -> Any:
