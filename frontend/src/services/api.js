@@ -60,6 +60,7 @@ export const streamJobProgress = (jobId, onProgress, onDone) => {
 export const listConcepts = (packId) => api.get(`/api/packs/${packId}/concepts`);
 export const updateConcept = (conceptId, data) => api.patch(`/api/concepts/${conceptId}`, data);
 export const deleteConcept = (conceptId) => api.delete(`/api/concepts/${conceptId}`);
+export const reportConcept = (conceptId) => api.post(`/api/concepts/${conceptId}/report`);
 
 // Sessions
 export const startSession = (packId, durationMinutes, docTypeFilter = null) =>

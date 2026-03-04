@@ -5,9 +5,9 @@ import { toast } from 'sonner';
 import {
   X, ChevronRight, RotateCcw, Zap, CheckCircle2, AlertTriangle,
   Loader2, BookOpen, Brain, TrendingDown, Activity, Swords,
-  ChevronDown, ChevronUp, Check, XCircle
+  ChevronDown, ChevronUp, Check, XCircle, Flag
 } from 'lucide-react';
-import { answerSession, getSessionDebrief, startDrillSession, evaluateAnswer } from '../services/api';
+import { answerSession, getSessionDebrief, startDrillSession, evaluateAnswer, reportConcept } from '../services/api';
 
 // ─── Rating config with new honest labels ────────────────────────────────────
 const RATING_CONFIG = {
@@ -348,6 +348,9 @@ export default function Session() {
   const [riskMessage, setRiskMessage] = useState(null);
   const [riskRating, setRiskRating] = useState(null); // for color
 
+  // Report concept
+  const [reporting, setReporting] = useState(false);
+
   // Session complete
   const [sessionComplete, setSessionComplete] = useState(false);
   const [finalStats, setFinalStats] = useState({});
@@ -374,6 +377,19 @@ export default function Session() {
       } finally {
         setEvaluating(false);
       }
+    }
+  };
+
+  const handleReport = async () => {
+    if (!concept?.id || reporting) return;
+    setReporting(true);
+    try {
+      await reportConcept(concept.id);
+      toast.success('Gemeldet – danke für dein Feedback.');
+    } catch {
+      toast.error('Melden fehlgeschlagen, bitte nochmal versuchen.');
+    } finally {
+      setReporting(false);
     }
   };
 
@@ -476,13 +492,25 @@ export default function Session() {
           >
             {/* Concept info */}
             <div className="glass-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <BookOpen size={13} className="text-brand-primary" />
-                <span className="text-xs font-mono text-brand-primary uppercase tracking-widest">{concept.title || 'Concept'}</span>
-                {check.type && <CheckTypeBadge type={check.type} />}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <BookOpen size={13} className="text-brand-primary flex-shrink-0" />
+                  <span className="text-xs font-mono text-brand-primary uppercase tracking-widest">{concept.title || 'Concept'}</span>
+                  {check.type && <CheckTypeBadge type={check.type} />}
+                </div>
+                <button
+                  data-testid="report-concept-btn"
+                  onClick={handleReport}
+                  disabled={reporting}
+                  title="Dieses Konzept melden (nicht relevant / fehlerhaft)"
+                  className="flex items-center gap-1 text-xs text-text-muted hover:text-risk-high transition-colors flex-shrink-0 disabled:opacity-40"
+                >
+                  <Flag size={11} />
+                  <span className="hidden sm:inline">{reporting ? 'Wird gemeldet…' : 'Melden'}</span>
+                </button>
               </div>
-              {concept.short_definition && (
-                <p className="text-sm text-text-secondary leading-relaxed">{concept.short_definition}</p>
+              {revealed && concept.short_definition && (
+                <p className="text-sm text-text-secondary leading-relaxed mt-2">{concept.short_definition}</p>
               )}
             </div>
 

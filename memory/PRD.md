@@ -2,7 +2,7 @@
 
 ## Original Problem Statement
 Build a Knowledge Memory MVP based on GitHub specs at https://github.com/lhaas-dev/learning.git.
-An adaptive learning engine for Cyber Security students. Users upload PDF/text study material,
+An adaptive learning engine for W&G/Cyber Security students. Users upload PDF/text study material,
 AI extracts concepts and generates knowledge checks, risk-based learning sessions help students retain knowledge.
 
 **Spec source:** GitHub repository with 18+ Markdown documents defining architecture, database schema, AI prompts, RAG strategy, chunking strategy, hallucination prevention rules, session engine, risk model, and API endpoints.
@@ -13,8 +13,9 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 
 - **Backend:** FastAPI (Python) + MongoDB (via Motor async driver)
 - **Frontend:** React 18 + React Router v6 + Tailwind CSS + Framer Motion
-- **AI:** Claude Sonnet 4-6 (claude-sonnet-4-6) via Emergent LLM Key
+- **AI:** Claude Haiku 4.5 (extraction/filter) + Claude Sonnet 4.6 (generation/reasoning) via Emergent LLM Key
 - **Design:** "Tactical Minimal" dark theme (Electric Cyan #00E5FF + Deep Obsidian #050505)
+- **LLM Output Format:** TOML (token-efficient; JSON fallback on parse error)
 
 ---
 

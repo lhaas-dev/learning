@@ -15,6 +15,7 @@ import base64
 import shutil
 import asyncio
 import logging
+import tomllib
 import requests as http_requests
 
 from passlib.context import CryptContext
@@ -268,20 +269,73 @@ async def call_haiku(system_message: str, user_text: str) -> str:
 
 def extract_json(text: str) -> Any:
     """Extract JSON from LLM response (may contain markdown code fences)."""
+    try:
+        from json_repair import repair_json as _repair
+        _HAS_REPAIR = True
+    except ImportError:
+        _HAS_REPAIR = False
+
     text = text.strip()
     text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'```$', '', text, flags=re.MULTILINE)
     text = text.strip()
-    return json.loads(text)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    if _HAS_REPAIR:
+        try:
+            return json.loads(_repair(text))
+        except Exception:
+            pass
+
+    m = re.search(r'\[\s*\{.+?\}\s*\]', text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group())
+        except Exception:
+            if _HAS_REPAIR:
+                try:
+                    return json.loads(_repair(m.group()))
+                except Exception:
+                    pass
+    raise ValueError("Could not parse JSON from LLM response")
 
 
-async def extract_concepts_from_chunk(chunk: str) -> list:
+def parse_toml_list(text: str, root_key: str) -> list:
+    """
+    Parse a TOML [[array-of-tables]] response from the LLM.
+    Falls back to JSON parsing if TOML fails.
+    """
+    text = text.strip()
+    # Strip markdown fences
+    text = re.sub(r'^```toml\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE)
+    text = text.strip()
+
+    try:
+        data = tomllib.loads(text)
+        return data.get(root_key, [])
+    except Exception as toml_err:
+        logger.debug(f"TOML parse failed for key '{root_key}': {toml_err} — trying JSON fallback")
+        try:
+            result = extract_json(text)
+            return result if isinstance(result, list) else []
+        except Exception:
+            return []
+
+
+async def extract_concepts_from_chunk(chunk: str, domain_context: str = "") -> list:
     system = f"You are an expert educator. {RAG_CONSTRAINT}"
+    domain_line = f"\nStudy Pack Domain: {domain_context}\nCRITICAL: Extract ONLY concepts relevant to this domain. Skip concepts about unrelated tools, software navigation, or off-topic material.\n" if domain_context else ""
     prompt = f"""You are an expert educator extracting LEARNABLE CONCEPTS from study material.
 
-CRITICAL: Respond in the SAME LANGUAGE as the study material below. If the material is in German, all output must be in German. If English, use English.
-
+CRITICAL: Respond in the SAME LANGUAGE as the study material below. If German, all output must be in German.
+{domain_line}
 Rules:
 - A concept must be testable.
 - One concept = one core idea.
@@ -289,26 +343,35 @@ Rules:
 - Prefer concepts that are commonly misunderstood by students.
 - If two ideas are tightly related but distinct, split them.
 - Do NOT include meta-topics (e.g. "introduction", "overview").
+- Skip concepts that are not relevant to the study pack domain.
 
-For each concept, return:
-1. concept_title (max 6 words, same language as material)
-2. short_definition (1-2 sentences, same language as material)
-3. common_mistake (typical student misconception, same language as material)
-4. prerequisite_concepts (list, empty if none are obvious)
+For each concept, return TOML fields:
+- concept_title (max 6 words)
+- short_definition (1-2 sentences)
+- common_mistake (typical student misconception)
+- prerequisite_concepts (list, empty if none)
 
 Study material:
 <<<
 {chunk}
 >>>
 
-Return the result as a JSON array. Return ONLY valid JSON, no other text."""
+Return ONLY valid TOML using [[concept]] array-of-tables. Example:
+
+[[concept]]
+concept_title = "Deckungsbeitrag"
+short_definition = "Die Differenz zwischen Erlösen und variablen Kosten."
+common_mistake = "Schüler verwechseln Deckungsbeitrag mit Gewinn."
+prerequisite_concepts = []
+
+Return ONLY valid TOML, no other text."""
 
     try:
-        response = await call_haiku(system, prompt)  # Fast model: extraction only
+        response = await call_haiku(system, prompt)
         if "INSUFFICIENT SOURCE INFORMATION" in response:
             return []
-        data = extract_json(response)
-        return data if isinstance(data, list) else []
+        data = parse_toml_list(response, 'concept')
+        return data if data else []
     except Exception as e:
         logger.warning(f"Concept extraction failed: {e}")
         return []
@@ -316,12 +379,11 @@ Return the result as a JSON array. Return ONLY valid JSON, no other text."""
 
 async def generate_checks_for_concept(concept: dict) -> list:
     system = f"You are generating exam-oriented knowledge checks for a student. {RAG_CONSTRAINT}"
-    # Detect language from concept content — respond in the same language
     concept_title = concept.get('concept_title', concept.get('title', ''))
     concept_def = concept.get('short_definition', '')
     prompt = f"""You are generating exam-oriented knowledge checks for a student.
 
-CRITICAL: Respond in the SAME LANGUAGE as the concept below. If German, all output must be in German. If English, use English.
+CRITICAL: Respond in the SAME LANGUAGE as the concept below. If German, all output must be in German.
 
 Concept:
 Title: {concept_title}
@@ -329,7 +391,6 @@ Definition: {concept_def}
 Common mistake: {concept.get('common_mistake', '')}
 
 Generate EXACTLY 4 checks:
-
 1. Recall check (direct factual recall)
 2. Contrast check (distinguish from a commonly confused concept)
 3. Scenario check (practical or exam-style situation)
@@ -338,29 +399,37 @@ Generate EXACTLY 4 checks:
 Rules:
 - Each check must test ONE idea only.
 - Avoid vague verbs ("explain", "discuss").
-- expected_answer must be a single exam-grade sentence — the core answer that captures the essential rule or distinction. No padding.
+- expected_answer must be a single exam-grade sentence.
 - short_explanation is 1-2 sentences of additional context only.
 - Do not include trick questions.
-- Assume exam pressure and time constraints.
-- All text (prompt, expected_answer, short_explanation, required_ideas, wrong_statements) must be in the same language as the concept.
+- All text must be in the same language as the concept.
 
-For each check, return:
-- type (recall | contrast | scenario | error)
-- prompt
-- expected_answer (single sentence, exam-grade core answer)
-- short_explanation (1-2 sentences additional context)
-- answer_requirements:
-    - required_ideas: list of 2-4 short phrases that MUST be present in a correct answer
-    - wrong_statements: list of 1-3 short phrases that would be explicitly incorrect for this question
+Return ONLY valid TOML using [[check]] array-of-tables. Example:
 
-Return the result as JSON array. Return ONLY valid JSON, no other text."""
+[[check]]
+type = "recall"
+prompt = "Was ist der Deckungsbeitrag?"
+expected_answer = "Die Differenz zwischen Erlösen und variablen Kosten."
+short_explanation = "Er zeigt den Beitrag zur Deckung der Fixkosten."
+required_ideas = ["Differenz Erlöse variable Kosten", "Fixkostendeckung"]
+wrong_statements = ["Deckungsbeitrag = Gewinn"]
+
+Return ONLY valid TOML, no other text."""
 
     try:
         response = await call_claude(system, prompt)
         if "INSUFFICIENT SOURCE INFORMATION" in response:
             return []
-        data = extract_json(response)
-        return data[:4] if isinstance(data, list) else []
+        raw_checks = parse_toml_list(response, 'check')
+        # Reconstruct answer_requirements from flat TOML fields
+        checks = []
+        for chk in raw_checks[:4]:
+            chk['answer_requirements'] = {
+                'required_ideas': chk.pop('required_ideas', []),
+                'wrong_statements': chk.pop('wrong_statements', []),
+            }
+            checks.append(chk)
+        return checks
     except Exception as e:
         logger.warning(f"Check generation failed: {e}")
         return []
@@ -371,37 +440,46 @@ async def quality_filter_checks(checks: list) -> list:
         return []
 
     system = "You are reviewing automatically generated study questions."
-    prompt = f"""You are reviewing automatically generated study questions.
 
-IMPORTANT: Respond in the same language as the questions below.
+    # Serialize checks summary for the prompt (compact, language-agnostic)
+    checks_summary = "\n".join([
+        f"[{i+1}] type={c.get('type','?')} | prompt: {c.get('prompt','')[:120]}"
+        for i, c in enumerate(checks)
+    ])
 
-For each question, decide one of:
-- KEEP
-- EDIT
-- DROP
+    prompt = f"""Review these automatically generated study questions.
 
-Evaluation criteria:
-- Is the question unambiguous?
-- Does it test exactly one idea?
-- Is the expected answer concise?
-- Would this realistically appear in a university exam?
-- Does it avoid unnecessary complexity?
+IMPORTANT: Respond in the same language as the questions.
 
-For each question, return:
-- decision (KEEP | EDIT | DROP)
-- short_reason
-- edited_version (only if decision = EDIT, with same fields as input)
+For each question decide: KEEP, EDIT, or DROP.
+- KEEP: Clear, tests one idea, realistic exam question.
+- EDIT: Fix it — provide improved prompt/answer only if needed.
+- DROP: Ambiguous, untestable, or off-topic.
 
 Questions:
-<<<
-{json.dumps(checks, ensure_ascii=False)}
->>>
+{checks_summary}
 
-Return the result as JSON array. Return ONLY valid JSON, no other text."""
+Return ONLY valid TOML using [[r]] array-of-tables. Example:
+
+[[r]]
+decision = "KEEP"
+short_reason = "Klar und präzise."
+
+[[r]]
+decision = "EDIT"
+short_reason = "Zu vage."
+prompt = "Überarbeitete Frage?"
+expected_answer = "Überarbeitete Antwort."
+
+[[r]]
+decision = "DROP"
+short_reason = "Nicht testbar."
+
+Return ONLY valid TOML, no other text."""
 
     try:
-        response = await call_haiku(system, prompt)  # Fast model: quality filter is mechanical
-        results = extract_json(response)
+        response = await call_haiku(system, prompt)
+        results = parse_toml_list(response, 'r')
         approved = []
         for i, result in enumerate(results):
             if i >= len(checks):
@@ -409,18 +487,20 @@ Return the result as JSON array. Return ONLY valid JSON, no other text."""
             decision = result.get("decision", "DROP").upper()
             if decision == "KEEP":
                 approved.append(checks[i])
-            elif decision == "EDIT" and result.get("edited_version"):
-                ev = result["edited_version"]
-                if ev.get("prompt") and ev.get("expected_answer"):
-                    merged = {**checks[i], **ev}
-                    approved.append(merged)
-                else:
-                    approved.append(checks[i])
-            # DROP: discard — per HALLUCINATION_PREVENTION.md
+            elif decision == "EDIT":
+                edited = dict(checks[i])
+                if result.get("prompt"):
+                    edited["prompt"] = result["prompt"]
+                if result.get("expected_answer"):
+                    edited["expected_answer"] = result["expected_answer"]
+                if result.get("short_explanation"):
+                    edited["short_explanation"] = result["short_explanation"]
+                approved.append(edited)
+            # DROP: discard
         return approved
     except Exception as e:
         logger.warning(f"Quality filter failed, keeping all: {e}")
-        return checks  # Fallback: keep all on filter error
+        return checks
 
 
 async def generate_micro_fix(concept: dict, check: dict, user_answer: str) -> dict:
@@ -848,9 +928,10 @@ async def get_pack(pack_id: str, user=Depends(get_current_user)):
 # ─── Upload & AI Pipeline (Background Task) ──────────────────────────────────
 
 async def _process_single_chunk(chunk: str, pack_id: str, job_id: str,
-                               doc_type: str = "", source_name: str = "") -> list:
+                               doc_type: str = "", source_name: str = "",
+                               domain_context: str = "") -> list:
     """Extract concepts + checks from one chunk and persist to DB."""
-    extracted = await extract_concepts_from_chunk(chunk)
+    extracted = await extract_concepts_from_chunk(chunk, domain_context)
     saved = []
     for concept_data in extracted:
         concept_doc = {
@@ -964,13 +1045,22 @@ When in doubt: KEEP_BOTH. Granularity is valuable for learners.
 
 {pairs_text}
 
-Return ONLY valid JSON array:
-[{{"pair": 1, "decision": "MERGE", "keep": "A"}}, {{"pair": 2, "decision": "KEEP_BOTH"}}]
-decision must be "MERGE" or "KEEP_BOTH". keep must be "A" or "B" (only when MERGE)."""
+Return ONLY valid TOML using [[m]] array-of-tables:
+
+[[m]]
+pair = 1
+decision = "MERGE"
+keep = "A"
+
+[[m]]
+pair = 2
+decision = "KEEP_BOTH"
+
+Return ONLY valid TOML, no other text."""
 
         try:
             response = await call_haiku(system, prompt)  # Merge decisions are mechanical
-            decisions = extract_json(response)
+            decisions = parse_toml_list(response, 'm')
             for d in decisions:
                 idx = d.get("pair", 0) - 1
                 if idx < 0 or idx >= len(batch):
@@ -1005,6 +1095,10 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str,
         if not doc_type:
             doc_type = await detect_document_type(raw_text)
 
+        # Fetch pack title for domain relevance filtering
+        pack_doc = await packs_col.find_one({"_id": ObjectId(pack_id)}, {"_id": 0, "title": 1})
+        domain_context = pack_doc.get("title", "") if pack_doc else ""
+
         await jobs_col.update_one(
             {"_id": ObjectId(job_id)},
             {"$set": {
@@ -1034,7 +1128,7 @@ async def _run_ai_pipeline(job_id: str, pack_id: str, raw_text: str,
 
         async def bounded(chunk):
             async with semaphore:
-                return await _process_single_chunk(chunk, pack_id, job_id, doc_type, source_name)
+                return await _process_single_chunk(chunk, pack_id, job_id, doc_type, source_name, domain_context)
 
         results = await asyncio.gather(*[bounded(c) for c in chunks], return_exceptions=True)
 
@@ -1446,6 +1540,31 @@ async def delete_concept(concept_id: str, user=Depends(get_current_user)):
         {"$set": {"concept_count": total}}
     )
     return {"deleted": True}
+
+
+@app.post("/api/concepts/{concept_id}/report")
+async def report_concept(concept_id: str, user=Depends(get_current_user)):
+    """Flag a concept as irrelevant or incorrect for manual review."""
+    try:
+        concept = await concepts_col.find_one({"_id": ObjectId(concept_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid concept ID")
+    if not concept:
+        raise HTTPException(status_code=404, detail="Concept not found")
+
+    # Verify ownership via pack
+    pack = await packs_col.find_one({
+        "_id": ObjectId(concept["study_pack_id"]),
+        "owner_id": str(user["_id"])
+    })
+    if not pack:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    await concepts_col.update_one(
+        {"_id": ObjectId(concept_id)},
+        {"$set": {"reported": True, "reported_at": datetime.now(timezone.utc)}}
+    )
+    return {"reported": True, "concept_id": concept_id}
 
 
 # ─── Session Routes ───────────────────────────────────────────────────────────
