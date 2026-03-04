@@ -96,8 +96,14 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 - [x] Multiple PDFs per pack — primary + optional extras, each gets own job tracker
 - [x] AI document type detection — classifies each upload as Theoriebuch, Abschlussprüfung, Übungstest, etc.
 - [x] DocTypeBadge component — displayed in upload result + job tracker
-- [x] German language generation — all AI output in source material language
-- [x] Upload page fully German UI ("Material hinzufügen", "Konzepte extrahieren", etc.)
+- [x] Source/doc_type filter in session start modal — "Alle", "Abschlussprüfung", "Theorie & Aufgaben" etc.
+- [x] doc_type stored on each concept (backfilled for existing books)
+- [x] SSE real-time progress stream (GET /api/jobs/{id}/stream) — "Kapitel X/N · ~Y Min verbleibend"
+- [x] Haiku 4.5 for extraction/filter/detection, Sonnet 4.6 for check generation/debrief/evaluation
+- [x] Semaphore(3) for parallel chunk processing
+- [x] Chunk overlap (100 words) + larger chunks (800 words) for better concept boundaries
+- [x] Concept merging (conservative — "when in doubt: keep separate")
+- [x] Before/After quality report in job result (chunks_total, avg_concepts_per_chunk, duplicates_merged)
   - Block 1: "Correct answer (core idea)" — bold core answer + collapsible explanation
   - Block 2: "What we understood from your answer" — extracted_claims bullet list, always visible for non-scenario
   - Block 3: "Missing or incorrect ideas" — "Missing key ideas:" list or "All required core ideas were addressed."

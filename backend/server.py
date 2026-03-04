@@ -253,16 +253,16 @@ def _make_blocking_call(model_provider: str, model_name: str, system_message: st
 
 
 async def call_claude(system_message: str, user_text: str) -> str:
-    """Sonnet — used for quality-critical tasks (check generation, merging)."""
+    """Sonnet 4.6 — used for quality-critical tasks (check generation, merging, debrief)."""
     return await asyncio.to_thread(
         _make_blocking_call("anthropic", "claude-sonnet-4-6", system_message, user_text)
     )
 
 
 async def call_haiku(system_message: str, user_text: str) -> str:
-    """Haiku — used for fast extraction tasks (concept extraction, quality filter, doc type)."""
+    """Haiku 4.5 — used for fast extraction tasks (concept extraction, quality filter, doc type)."""
     return await asyncio.to_thread(
-        _make_blocking_call("anthropic", "claude-haiku-4-6", system_message, user_text)
+        _make_blocking_call("anthropic", "claude-haiku-4-5-20251001", system_message, user_text)
     )
 
 
