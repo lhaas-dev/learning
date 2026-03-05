@@ -1,0 +1,71 @@
+{
+  "summary": "Iteration 6: Full testing of new Admin-View (GEMELDET tab), bulk actions, Session definition reveal, and new endpoints. All 22 backend tests passed. All frontend features verified via Playwright.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ReportedConceptRow (AnimatePresence)",
+        "issue": "React warning: 'Function components cannot be given refs' from framer-motion AnimatePresence mode='popLayout'. Exit animations on dismiss/delete may not run correctly. Fix: use motion.div directly or wrap with React.forwardRef.",
+        "selector": "[data-testid^='reported-row-']",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "GEMELDET tab badge on initial load",
+        "issue": "Badge count on GEMELDET tab is 0 on initial page load. It only shows after clicking the tab (because ReportedTab is rendered lazily). Users cannot see badge count without clicking tab first. Spec says 'Tab erscheint mit Badge-Zahl'. Fix: fetch reportedCount in StudyPackDetail fetchData on mount.",
+        "affected_selectors": ["[data-testid='tab-reported'] span"]
+      }
+    ],
+    "design_issues": []
+  },
+  "features_verified": [
+    "GEMELDET tab appears as second tab: PASS",
+    "GEMELDET tab badge shows count after clicking tab (badge = 6): PASS",
+    "Reported concepts loaded: 6 rows with title, definition, doc_type badge, date: PASS",
+    "Single row checkbox select/deselect on click: PASS",
+    "Bulk button text updates to '1 ausgewählt · Dismiss' after 1 selection: PASS",
+    "Bulk select all: 'Alle auswählen' selects all 6 rows, button changes to 'Auswahl aufheben': PASS",
+    "Bulk Dismiss: POST /api/packs/{id}/concepts/bulk-dismiss called, toast '1 Meldung verworfen', list reduced from 6 to 5: PASS",
+    "Badge count updates after dismiss: PASS (5 shown after 1 dismiss)",
+    "Session: short_definition NOT visible before REVEAL ANSWER click: PASS (only title, type badge, report button shown)",
+    "Session: short_definition APPEARS in concept card after REVEAL ANSWER click: PASS",
+    "Session: Correct answer panel, rating buttons visible after reveal: PASS",
+    "Session Report button: toast 'Gemeldet – danke für dein Feedback.' shown after click: PASS",
+    "KONZEPTE tab still shows 933 concepts: PASS",
+    "POST /api/concepts/{id}/report: 200, reported=true, concept_id returned: PASS",
+    "GET /api/packs/{id}/reported-concepts: returns list with id/title/short_definition/reported_at: PASS",
+    "POST /api/packs/{id}/concepts/bulk-dismiss: 200, dismissed count returned, flag cleared: PASS",
+    "POST /api/packs/{id}/concepts/bulk-delete: 200, deleted count returned (tested with empty list): PASS",
+    "POST /api/upload/text: 200, job_id+status=queued returned: PASS",
+    "All endpoints require authentication (401/403 without token): PASS"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_admin_reported_concepts.py",
+    "/app/test_reports/pytest/admin_reported_results.xml"
+  ],
+  "action_items": [
+    "Fix React ref warning: ReportedConceptRow used inside AnimatePresence mode='popLayout' needs forwardRef. Wrap motion.div in React.forwardRef or switch to non-popLayout mode.",
+    "UX: Fetch reportedCount in StudyPackDetail.fetchData() on initial mount so badge shows without requiring tab click first."
+  ],
+  "critical_code_review_comments": [
+    "Badge loads lazily: reportedCount stays 0 until tab click since ReportedTab is only rendered when activeTab === 'reported'. Should pre-fetch count in parent's fetchData().",
+    "AnimatePresence mode='popLayout' requires forwardRef on child components. ReportedConceptRow as a plain function component causes React warning. Exit animations are broken.",
+    "server.py is 2202 lines - should be split into router modules (pre-existing, reported in iter4/5)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_admin_reported_concepts.py"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22 passed)",
+    "frontend": "95% — all features working, 1 minor ref warning, 1 minor UX issue (badge not shown on initial load)"
+  },
+  "seed_data_creation": "Test dismissed concept 69a82cf3c7c639682e4e9255 during UI test, immediately re-reported via API to restore state. All 6 originally reported concepts restored.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All new features verified: GEMELDET tab (6 reported concepts), bulk dismiss/delete, session reveal (definition hidden until reveal), report button with toast. Backend endpoints all working. Minor issue: badge count not shown on initial load (lazy rendering). Minor React warning for AnimatePresence ref. Test user: test_km_tester@example.com / password123. Pack 69a82c7bc7c639682e4e9224 (W&G ES5, 933 concepts, 6 reported).",
+  "rca_of_issues": "1. AnimatePresence forwardRef warning: framer-motion's mode='popLayout' requires child components to forward refs to allow exit animation measurement. ReportedConceptRow returns motion.div directly but the function component itself isn't wrapped with forwardRef, so PopChild's ref attachment fails. Fix: wrap ReportedConceptRow with React.forwardRef() or use AnimatePresence without mode='popLayout'. 2. Badge lazy load: reportedCount is initialized to 0 and only updated when ReportedTab mounts (which only happens on tab click). Parent component needs to call listReportedConcepts in its initial fetchData and setReportedCount from the response."
+}

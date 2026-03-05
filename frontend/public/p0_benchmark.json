@@ -1,0 +1,107 @@
+{
+  "doc_words": 1520,
+  "pack_id": "69a9b2dc60c600dfecec9d96",
+  "job_id": "69a9b2dc60c600dfecec9d97",
+  "job_status": "timeout",
+  "old_metrics": {
+    "chunks": 5,
+    "avg_words_per_chunk": 300,
+    "overlap_words": 0,
+    "est_concepts_extracted": 25,
+    "est_duplicates": 4,
+    "est_final_concepts": 21,
+    "domain_filter": false
+  },
+  "new_metrics": {
+    "chunks": 3,
+    "avg_words_per_chunk": 800,
+    "overlap_words": 100,
+    "total_extracted": 34,
+    "duplicates_merged": 0,
+    "final_concepts": 34,
+    "domain_filter": true
+  },
+  "quality_report": {},
+  "concept_sample": [
+    {
+      "title": "Fixe Kosten verstehen",
+      "short_definition": "Kosten, die unabhängig von der Produktionsmenge anfallen und kurzfristig konstant bleiben, wie Miete"
+    },
+    {
+      "title": "Frühindikatoren der Konjunktur",
+      "short_definition": "Indikatoren, die Konjunkturveränderungen VOR ihrem Eintritt anzeigen, wie Auftragseingänge oder Kons"
+    },
+    {
+      "title": "Variable Kosten berechnen",
+      "short_definition": "Kosten, die sich proportional zur produzierten Menge verändern, wie Rohstoffe oder Akkordlöhne."
+    },
+    {
+      "title": "Spätindikatoren der Konjunktur",
+      "short_definition": "Indikatoren, die Konjunkturveränderungen erst NACH ihrem Eintritt anzeigen, wie die Arbeitslosenquot"
+    },
+    {
+      "title": "Deckungsbeitrag pro Stück",
+      "short_definition": "Die Differenz zwischen Erlös und variablen Kosten pro Stück, die zur Fixkostendeckung beiträgt."
+    },
+    {
+      "title": "Antizyklische Fiskalpolitik",
+      "short_definition": "Der Staat erhöht Ausgaben in der Rezession und spart im Boom, um Konjunkturschwankungen zu glätten."
+    },
+    {
+      "title": "Gesamtdeckungsbeitrag ermitteln",
+      "short_definition": "Das Produkt aus Deckungsbeitrag pro Stück und verkaufter Menge, das alle Fixkosten decken muss."
+    },
+    {
+      "title": "Expansive Geldpolitik",
+      "short_definition": "Die Zentralbank senkt Leitzinsen, um Kredite billiger zu machen und Investitionen zu fördern."
+    },
+    {
+      "title": "Gewinn aus Deckungsbeitrag",
+      "short_definition": "Der Gewinn ergibt sich, indem man die Fixkosten vom Gesamtdeckungsbeitrag abzieht."
+    },
+    {
+      "title": "Restriktive Geldpolitik",
+      "short_definition": "Die Zentralbank erhöht Leitzinsen, um Kredite teurer zu machen und Inflation zu bekämpfen."
+    },
+    {
+      "title": "Break-even-Menge berechnen",
+      "short_definition": "Die Menge, bei der Fixkosten genau durch den Gesamtdeckungsbeitrag gedeckt sind und Gewinn null ist."
+    },
+    {
+      "title": "Break-even-Umsatz bestimmen",
+      "short_definition": "Der Umsatz in CHF, bei dem das Unternehmen die Gewinnschwelle erreicht und keinen Gewinn oder Verlus"
+    },
+    {
+      "title": "Verwendungsrechnung des BIP",
+      "short_definition": "BIP = C + I + G + (X – M), bestehend aus privatem Konsum, Investitionen, Staatsausgaben und Nettoexp"
+    },
+    {
+      "title": "Sicherheitsmarge analysieren",
+      "short_definition": "Die Differenz zwischen aktuellem Umsatz und Break-even-Umsatz, die anzeigt, wie viel Umsatz wegfalle"
+    },
+    {
+      "title": "Nominales versus reales BIP",
+      "short_definition": "Nominales BIP wird zu aktuellen Preisen gemessen, reales BIP ist inflationsbereinigt und zeigt tatsä"
+    },
+    {
+      "title": "Mehrstufige Deckungsbeitragsrechnung",
+      "short_definition": "Ein Verfahren, das Fixkosten in produktspezifische und unternehmensspezifische anteile unterteilt un"
+    },
+    {
+      "title": "BIP pro Kopf als Wohlstandsindikator",
+      "short_definition": "BIP dividiert durch die Einwohnerzahl; wird verwendet, um den Wohlstand pro Person zu messen."
+    },
+    {
+      "title": "Aufschwung im Konjunkturzyklus",
+      "short_definition": "Die Phase mit wachsendem BIP, sinkender Arbeitslosigkeit und steigenden Investitionen und Konsumausg"
+    },
+    {
+      "title": "Stückdeckungsbeitrag berechnen",
+      "short_definition": "DB₁ = p – kv; zeigt, wie viel jedes verkaufte Produkt zur Deckung von Fixkosten und Gewinn beiträgt."
+    },
+    {
+      "title": "Hochkonjunktur erkennen",
+      "short_definition": "Die Phase mit stark wachsendem BIP, hoher Auslastung, Arbeitskräftemangel und steigenden Preisen (In"
+    }
+  ]
+}

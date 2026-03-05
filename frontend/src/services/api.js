@@ -61,6 +61,9 @@ export const listConcepts = (packId) => api.get(`/api/packs/${packId}/concepts`)
 export const updateConcept = (conceptId, data) => api.patch(`/api/concepts/${conceptId}`, data);
 export const deleteConcept = (conceptId) => api.delete(`/api/concepts/${conceptId}`);
 export const reportConcept = (conceptId) => api.post(`/api/concepts/${conceptId}/report`);
+export const listReportedConcepts = (packId) => api.get(`/api/packs/${packId}/reported-concepts`);
+export const bulkDeleteConcepts = (packId, conceptIds) => api.post(`/api/packs/${packId}/concepts/bulk-delete`, { concept_ids: conceptIds });
+export const bulkDismissReports = (packId, conceptIds) => api.post(`/api/packs/${packId}/concepts/bulk-dismiss`, { concept_ids: conceptIds });
 
 // Sessions
 export const startSession = (packId, durationMinutes, docTypeFilter = null) =>

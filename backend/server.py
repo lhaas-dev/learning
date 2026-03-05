@@ -417,7 +417,7 @@ wrong_statements = ["Deckungsbeitrag = Gewinn"]
 Return ONLY valid TOML, no other text."""
 
     try:
-        response = await call_claude(system, prompt)
+        response = await call_haiku(system, prompt)   # Haiku is now standard for all check types
         if "INSUFFICIENT SOURCE INFORMATION" in response:
             return []
         raw_checks = parse_toml_list(response, 'check')
@@ -1456,6 +1456,50 @@ async def upload_from_url(
     return {"job_id": job_id, "status": "queued"}
 
 
+class TextUploadRequest(BaseModel):
+    pack_id: str
+    content: str
+    source_name: str = "Text Upload"
+
+
+@app.post("/api/upload/text")
+async def upload_from_text(
+    req: TextUploadRequest,
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user),
+):
+    """Accept raw text content and start the AI pipeline (used for testing / benchmarks)."""
+    try:
+        pack = await packs_col.find_one({"_id": ObjectId(req.pack_id), "owner_id": str(user["_id"])})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid pack ID")
+    if not pack:
+        raise HTTPException(status_code=404, detail="Pack not found")
+
+    raw_text = req.content.strip()
+    if not raw_text:
+        raise HTTPException(status_code=400, detail="Empty content")
+
+    job_doc = {
+        "pack_id": req.pack_id,
+        "user_id": str(user["_id"]),
+        "status": "queued",
+        "source_name": req.source_name,
+        "doc_type": "",
+        "created_at": datetime.now(timezone.utc),
+        "started_at": None,
+        "completed_at": None,
+        "concepts_extracted": 0,
+        "chunks_processed": 0,
+        "concepts": [],
+        "error": None,
+    }
+    result = await jobs_col.insert_one(job_doc)
+    job_id = str(result.inserted_id)
+    background_tasks.add_task(_run_ai_pipeline, job_id, req.pack_id, raw_text, req.source_name)
+    return {"job_id": job_id, "status": "queued"}
+
+
 # ─── Concept Routes ───────────────────────────────────────────────────────────
 @app.get("/api/packs/{pack_id}/concepts")
 async def list_concepts(pack_id: str, user=Depends(get_current_user)):
@@ -1565,6 +1609,88 @@ async def report_concept(concept_id: str, user=Depends(get_current_user)):
         {"$set": {"reported": True, "reported_at": datetime.now(timezone.utc)}}
     )
     return {"reported": True, "concept_id": concept_id}
+
+
+@app.get("/api/packs/{pack_id}/reported-concepts")
+async def list_reported_concepts(pack_id: str, user=Depends(get_current_user)):
+    """Return all reported concepts for a study pack."""
+    pack = await packs_col.find_one({"_id": ObjectId(pack_id), "owner_id": str(user["_id"])})
+    if not pack:
+        raise HTTPException(status_code=404, detail="Pack not found")
+
+    docs = await concepts_col.find(
+        {"study_pack_id": pack_id, "reported": True},
+        {"_id": 1, "title": 1, "short_definition": 1, "common_mistake": 1,
+         "doc_type": 1, "reported_at": 1}
+    ).sort("reported_at", -1).to_list(length=None)
+
+    result = []
+    for d in docs:
+        reported_at = d.get("reported_at")
+        result.append({
+            "id": str(d["_id"]),
+            "title": d.get("title", ""),
+            "short_definition": d.get("short_definition", ""),
+            "common_mistake": d.get("common_mistake", ""),
+            "doc_type": d.get("doc_type", ""),
+            "reported_at": reported_at.isoformat() if reported_at else None,
+        })
+    return result
+
+
+class BulkConceptRequest(BaseModel):
+    concept_ids: List[str]
+
+
+@app.post("/api/packs/{pack_id}/concepts/bulk-delete")
+async def bulk_delete_concepts(pack_id: str, req: BulkConceptRequest, user=Depends(get_current_user)):
+    """Delete multiple concepts at once."""
+    pack = await packs_col.find_one({"_id": ObjectId(pack_id), "owner_id": str(user["_id"])})
+    if not pack:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    object_ids = []
+    for cid in req.concept_ids:
+        try:
+            object_ids.append(ObjectId(cid))
+        except Exception:
+            pass
+
+    if not object_ids:
+        return {"deleted": 0}
+
+    await concepts_col.delete_many({"_id": {"$in": object_ids}, "study_pack_id": pack_id})
+    await checks_col.delete_many({"concept_id": {"$in": req.concept_ids}})
+    await ucs_col.delete_many({"concept_id": {"$in": req.concept_ids}})
+
+    total = await concepts_col.count_documents({"study_pack_id": pack_id})
+    await packs_col.update_one({"_id": ObjectId(pack_id)}, {"$set": {"concept_count": total}})
+
+    return {"deleted": len(object_ids)}
+
+
+@app.post("/api/packs/{pack_id}/concepts/bulk-dismiss")
+async def bulk_dismiss_reports(pack_id: str, req: BulkConceptRequest, user=Depends(get_current_user)):
+    """Clear the 'reported' flag from multiple concepts (mark as reviewed / false alarm)."""
+    pack = await packs_col.find_one({"_id": ObjectId(pack_id), "owner_id": str(user["_id"])})
+    if not pack:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    object_ids = []
+    for cid in req.concept_ids:
+        try:
+            object_ids.append(ObjectId(cid))
+        except Exception:
+            pass
+
+    if not object_ids:
+        return {"dismissed": 0}
+
+    await concepts_col.update_many(
+        {"_id": {"$in": object_ids}, "study_pack_id": pack_id},
+        {"$set": {"reported": False}, "$unset": {"reported_at": ""}}
+    )
+    return {"dismissed": len(object_ids)}
 
 
 # ─── Session Routes ───────────────────────────────────────────────────────────

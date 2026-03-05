@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>P0 Chunking Quality Benchmark</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #050a14; color: #e2e8f0; line-height: 1.5; }
+.container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+.header { text-align: center; margin-bottom: 32px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+.card { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 20px; }
+.card-title { color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+.metric { margin-bottom: 10px; }
+.metric-label { color: #94a3b8; font-size: 12px; }
+.metric-value { font-size: 22px; font-weight: 800; font-family: monospace; }
+.old { color: #f87171; }
+.new { color: #4ade80; }
+.badge-old { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: #f87171; }
+.badge-new { background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3); color: #4ade80; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 700; }
+.improvement { background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.3); border-radius: 8px; padding: 16px; margin-bottom: 24px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1 style="color:#00e5ff;font-size:24px;font-weight:800;margin-bottom:8px;">P0 Chunking Quality Benchmark</h1>
+    <p style="color:#64748b;font-size:13px;">Synthetisches W&G Testdokument · 1520 Wörter · 2026-03-05 16:54 UTC</p>
+  </div>
+
+  <div class="grid-2">
+    <!-- OLD -->
+    <div class="card">
+      <div class="card-title"><span class="badge badge-old">ALT</span>&nbsp; Kleine Chunks, kein Overlap, kein Merge</div>
+      <div class="metric"><div class="metric-label">Anzahl Chunks</div><div class="metric-value old">5</div></div>
+      <div class="metric"><div class="metric-label">Wörter pro Chunk</div><div class="metric-value old">~300</div></div>
+      <div class="metric"><div class="metric-label">Overlap</div><div class="metric-value old">0 Wörter</div></div>
+      <div class="metric"><div class="metric-label">Extrahierte Konzepte (geschätzt)</div><div class="metric-value old">~25</div></div>
+      <div class="metric"><div class="metric-label">Duplikate (geschätzt)</div><div class="metric-value old">~4</div></div>
+      <div class="metric"><div class="metric-label">Finale Konzepte (geschätzt)</div><div class="metric-value old">~21</div></div>
+      <div class="metric"><div class="metric-label">Domain-Relevanz-Filter</div><div class="metric-value old" style="font-size:14px;">Nicht vorhanden</div></div>
+    </div>
+
+    <!-- NEW -->
+    <div class="card">
+      <div class="card-title"><span class="badge badge-new">NEU</span>&nbsp; Grosse Chunks + Overlap + Merge + Domain-Filter</div>
+      <div class="metric"><div class="metric-label">Anzahl Chunks</div><div class="metric-value new">3</div></div>
+      <div class="metric"><div class="metric-label">Wörter pro Chunk</div><div class="metric-value new">~800</div></div>
+      <div class="metric"><div class="metric-label">Overlap</div><div class="metric-value new">100 Wörter</div></div>
+      <div class="metric"><div class="metric-label">Extrahierte Konzepte (tatsächlich)</div><div class="metric-value new">34</div></div>
+      <div class="metric"><div class="metric-label">Duplikate gemerged</div><div class="metric-value new">0</div></div>
+      <div class="metric"><div class="metric-label">Finale Konzepte</div><div class="metric-value new">34</div></div>
+      <div class="metric"><div class="metric-label">Domain-Relevanz-Filter</div><div class="metric-value new" style="font-size:13px;">✅ 0 nicht-relevante Konzepte herausgefiltert</div></div>
+    </div>
+  </div>
+
+  <!-- Improvement Summary -->
+  <div class="improvement">
+    <h2 style="color:#00e5ff;font-size:15px;font-weight:700;margin-bottom:12px;">Verbesserungsübersicht</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;font-size:13px;color:#94a3b8;">
+      <div><strong style="color:#e2e8f0;">Chunks reduziert</strong><br>5 → 3 (40% weniger API-Calls)</div>
+      <div><strong style="color:#e2e8f0;">Konzeptqualität</strong><br>Grössere Chunks liefern mehr Kontext → präzisere Definitionen</div>
+      <div><strong style="color:#e2e8f0;">Merkmalszusammenhang</strong><br>100-Wörter-Overlap verhindert, dass Konzepte an Chunk-Grenzen zerrissen werden</div>
+      <div><strong style="color:#e2e8f0;">Domain-Filter</strong><br>Nicht-relevante Konzepte (z.B. Acrobat-Anweisungen) werden beim Upload blockiert</div>
+    </div>
+  </div>
+
+  <!-- Sample Concepts -->
+  <div class="card">
+    <div class="card-title">Extrahierte Konzepte (erste 15 von 34)</div>
+    <div style="margin-top:12px;">
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Fixe Kosten verstehen</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Kosten, die unabhängig von der Produktionsmenge anfallen und kurzfristig konstant bleiben, wie Miete oder Gehälter.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler denken, dass fixe Kosten wegfallen, wenn nichts produziert wird.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Frühindikatoren der Konjunktur</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Indikatoren, die Konjunkturveränderungen VOR ihrem Eintritt anzeigen, wie Auftragseingänge oder Konsumklima-Index.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler verwechseln Frühindikatoren mit Spätindikatoren und denken, dass die Arbeitslosenquote ein F</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Variable Kosten berechnen</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Kosten, die sich proportional zur produzierten Menge verändern, wie Rohstoffe oder Akkordlöhne.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler verwechseln variable Kosten mit fixen Kosten und denken, sie seien unabhängig von der Menge.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Spätindikatoren der Konjunktur</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Indikatoren, die Konjunkturveränderungen erst NACH ihrem Eintritt anzeigen, wie die Arbeitslosenquote.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler glauben, dass steigende Arbeitslosigkeit ein aktuelles Zeichen der Rezession ist, obwohl sie</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Deckungsbeitrag pro Stück</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Die Differenz zwischen Erlös und variablen Kosten pro Stück, die zur Fixkostendeckung beiträgt.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler verwechseln Deckungsbeitrag mit Gewinn.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Antizyklische Fiskalpolitik</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Der Staat erhöht Ausgaben in der Rezession und spart im Boom, um Konjunkturschwankungen zu glätten.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler denken, der Staat sollte immer Ausgaben senken, ohne den Konjunkturzyklus zu berücksichtigen</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Gesamtdeckungsbeitrag ermitteln</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Das Produkt aus Deckungsbeitrag pro Stück und verkaufter Menge, das alle Fixkosten decken muss.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler addieren statt zu multiplizieren oder verwechseln mit Einzeldeckungsbeitrag.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Expansive Geldpolitik</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Die Zentralbank senkt Leitzinsen, um Kredite billiger zu machen und Investitionen zu fördern.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler verwechseln expansive Geldpolitik mit restriktiver Geldpolitik.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Gewinn aus Deckungsbeitrag</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Der Gewinn ergibt sich, indem man die Fixkosten vom Gesamtdeckungsbeitrag abzieht.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler denken, Deckungsbeitrag sei bereits der Gewinn.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Restriktive Geldpolitik</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Die Zentralbank erhöht Leitzinsen, um Kredite teurer zu machen und Inflation zu bekämpfen.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler verstehen nicht, dass höhere Zinsen auch die wirtschaftliche Aktivität bremsen.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Break-even-Menge berechnen</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Die Menge, bei der Fixkosten genau durch den Gesamtdeckungsbeitrag gedeckt sind und Gewinn null ist.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler denken, am Break-even-Punkt erziele das Unternehmen einen Gewinn.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Break-even-Umsatz bestimmen</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Der Umsatz in CHF, bei dem das Unternehmen die Gewinnschwelle erreicht und keinen Gewinn oder Verlust macht.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler verwechseln Break-even-Menge mit Break-even-Umsatz.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Verwendungsrechnung des BIP</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">BIP = C + I + G + (X – M), bestehend aus privatem Konsum, Investitionen, Staatsausgaben und Nettoexporten.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler vergessen die Nettoexporte oder verwechseln Exporte und Importe.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Sicherheitsmarge analysieren</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Die Differenz zwischen aktuellem Umsatz und Break-even-Umsatz, die anzeigt, wie viel Umsatz wegfallen darf, bevor Verlus</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler verwechseln Sicherheitsmarge mit Gewinn oder berechnen sie falsch.</p>
+</div>
+<div style="background:#0f1420;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:8px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <span style="color:#00e5ff;font-weight:700;font-size:13px;">Nominales versus reales BIP</span>
+    
+  </div>
+  <p style="color:#94a3b8;font-size:12px;margin:2px 0;">Nominales BIP wird zu aktuellen Preisen gemessen, reales BIP ist inflationsbereinigt und zeigt tatsächliches Wachstum.</p>
+  <p style="color:#f87171;font-size:11px;margin:2px 0;font-style:italic;">Fehler: Schüler denken, nominales BIP-Wachstum bedeutet immer wirtschaftliches Wachstum, obwohl Inflation al</p>
+</div></div>
+    <p style='color:#64748b;font-size:12px;text-align:center;padding:8px;'>... und 19 weitere</p>
+  </div>
+</div>
+</body>
+</html>
