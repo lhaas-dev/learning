@@ -62,7 +62,7 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 
 ---
 
-## What's Been Implemented (Feb 26, 2026)
+## What's Been Implemented (Feb 26 – Mar 5, 2026)
 
 ### Backend (server.py)
 - [x] POST /api/auth/register + POST /api/auth/login (JWT)
@@ -70,16 +70,41 @@ AI extracts concepts and generates knowledge checks, risk-based learning session
 - [x] POST /api/packs/:id/upload → background task → returns job_id
 - [x] GET /api/jobs/:id → poll for processing status
 - [x] GET /api/packs/:id/concepts, PATCH /api/concepts/:id, DELETE /api/concepts/:id
+- [x] POST /api/concepts/:id/report — flag concept as irrelevant
+- [x] GET /api/packs/:id/reported-concepts — list flagged concepts
+- [x] POST /api/packs/:id/concepts/bulk-delete — delete multiple concepts
+- [x] POST /api/packs/:id/concepts/bulk-dismiss — clear report flags
 - [x] POST /api/sessions/start (risk-sorted queue)
-- [x] POST /api/sessions/answer (stability/recall updates + micro-fix + session_id tracking in review events)
+- [x] POST /api/sessions/answer (stability/recall updates + micro-fix + session_id tracking)
 - [x] GET /api/sessions/:id
-- [x] GET /api/sessions/:id/debrief (Claude, session-data-only, graceful fallback)
-- [x] POST /api/sessions/drill (5-min fix drill, recall+contrast only, max 2 concepts)
-- [x] POST /api/checks/evaluate (claim extraction + deterministic matching, never overrides user rating)
-- [x] GET /api/dashboard/overview (includes drill session labeling)
-- [x] AI Pipeline: concept extraction, check generation (4 types), quality filtering, micro-fix, session debrief
-- [x] RAG: source-only constraints, no hallucination, returns INSUFFICIENT_SOURCE_INFORMATION
-- [x] Chunking: 300-600 word chunks at paragraph boundaries
+- [x] GET /api/sessions/:id/debrief (Claude Sonnet only)
+- [x] POST /api/sessions/drill
+- [x] POST /api/checks/evaluate (claim extraction + deterministic matching)
+- [x] GET /api/dashboard/overview
+- [x] POST /api/upload/chunk + /api/upload/finalize (chunked PDF)
+- [x] POST /api/upload/url (URL-as-source)
+- [x] POST /api/upload/text (direct text upload for benchmarks)
+- [x] AI Pipeline: Haiku for ALL extraction, check gen, quality filter, merge; Sonnet ONLY for evaluate+debrief
+- [x] TOML output format for all LLM prompts (token-efficient, better Unicode robustness)
+- [x] Domain-relevance filter in extraction prompt (prevents off-topic concept extraction)
+- [x] Chunk overlap (100 words) + 800-word chunks for better context at boundaries
+- [x] Concept merging (conservative deduplication within pack)
+
+### Frontend
+- [x] Auth page (login/register)
+- [x] Dashboard (stats, weakest concepts, session history)
+- [x] Study Pack Detail with tab system: KONZEPTE | GEMELDET
+- [x] GEMELDET tab: batch review with checkbox, bulk dismiss/delete, per-row actions
+- [x] Badge count on GEMELDET tab loaded on page mount (pre-fetched)
+- [x] Session: definition hidden before REVEAL ANSWER (no answer spoiler)
+- [x] Session: "Melden" button to report bad/irrelevant concepts
+- [x] Session source filter by doc type
+- [x] Upload page (PDF chunked + URL + text)
+- [x] Session debrief screen
+
+### Benchmarks
+- `/benchmark.html` — Haiku vs Sonnet vs Hybrid Check Generation (20×3 variants, filter by type)
+- `/p0_benchmark.html` — P0 Chunking Quality (domain filter proof: 0/116 off-topic words extracted)
 
 ### Frontend
 - [x] Auth page (login/register, split-screen design)

@@ -395,7 +395,7 @@ function ReportedTab({ packId, onCountChange }) {
 
       {/* List */}
       <div className="space-y-2">
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence>
           {reported.map((c) => (
             <ReportedConceptRow
               key={c.id}
@@ -506,9 +506,14 @@ export default function StudyPackDetail() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [packRes, conceptsRes] = await Promise.all([getPack(packId), listConcepts(packId)]);
+      const [packRes, conceptsRes, reportedRes] = await Promise.all([
+        getPack(packId),
+        listConcepts(packId),
+        listReportedConcepts(packId),
+      ]);
       setPack(packRes.data);
       setConcepts(conceptsRes.data);
+      setReportedCount(reportedRes.data.length);
     } catch {
       toast.error('Failed to load pack');
       navigate('/dashboard');
