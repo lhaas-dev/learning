@@ -6,13 +6,106 @@ import {
   ArrowLeft, Upload, Play, Pencil, Trash2, Check, X,
   BookOpen, AlertTriangle, Loader2, ChevronDown,
   AlertCircle, CheckCircle, Flame, GitBranch, Target, Tag, Filter,
-  Flag, Square, CheckSquare, Minus,
+  Flag, Square, CheckSquare, Minus, Calendar, Clock,
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import {
   getPack, listConcepts, updateConcept, deleteConcept, startSession,
-  listReportedConcepts, bulkDeleteConcepts, bulkDismissReports,
+  listReportedConcepts, bulkDeleteConcepts, bulkDismissReports, updatePackExamDate,
 } from '../services/api';
+
+// ─── Exam Date helpers ────────────────────────────────────────────────────────
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const exam = new Date(dateStr); exam.setHours(0, 0, 0, 0);
+  return Math.round((exam - today) / 86400000);
+}
+
+function ExamDateBadge({ examDate }) {
+  const days = daysUntil(examDate);
+  if (days === null) return null;
+  let color, bg, label;
+  if (days < 0)       { color = '#8b949e'; bg = 'rgba(139,148,158,0.1)'; label = 'Prüfung vorbei'; }
+  else if (days === 0){ color = '#FF2D55'; bg = 'rgba(255,45,85,0.15)';  label = 'Prüfung heute!'; }
+  else if (days < 3)  { color = '#FF2D55'; bg = 'rgba(255,45,85,0.12)';  label = `Prüfung in ${days} Tag${days !== 1 ? 'en' : ''}`; }
+  else if (days < 7)  { color = '#FF2D55'; bg = 'rgba(255,45,85,0.1)';   label = `Prüfung in ${days} Tagen`; }
+  else if (days < 14) { color = '#FF9500'; bg = 'rgba(255,149,0,0.1)';   label = `Prüfung in ${days} Tagen`; }
+  else                { color = '#00C853'; bg = 'rgba(0,200,83,0.1)';     label = `Prüfung in ${days} Tagen`; }
+  return (
+    <span
+      data-testid="exam-date-badge"
+      className="inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded border font-semibold"
+      style={{ color, background: bg, borderColor: `${color}40` }}
+    >
+      <Clock size={10} />
+      {label}
+    </span>
+  );
+}
+
+function ExamDateSection({ packId, examDate, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const today = new Date().toISOString().split('T')[0];
+
+  const handleSave = async (value) => {
+    setSaving(true);
+    try {
+      const res = await updatePackExamDate(packId, value || null);
+      onUpdate(res.data.exam_date ?? null);
+      setEditing(false);
+      toast.success(value ? `Prüfungsdatum gesetzt: ${value}` : 'Prüfungsdatum entfernt');
+    } catch { toast.error('Fehler beim Speichern'); }
+    finally { setSaving(false); }
+  };
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <ExamDateBadge examDate={examDate} />
+        <button
+          data-testid="edit-exam-date-btn"
+          onClick={() => setEditing(true)}
+          className="flex items-center gap-1 text-xs font-mono text-text-muted hover:text-brand-primary transition-colors"
+        >
+          <Calendar size={12} />
+          {examDate ? 'Ändern' : 'Prüfungsdatum'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2" data-testid="exam-date-picker-form">
+      <input
+        data-testid="exam-date-input"
+        type="date"
+        defaultValue={examDate || ''}
+        min={today}
+        onChange={(e) => handleSave(e.target.value)}
+        className="bg-black/40 border border-white/10 text-xs font-mono text-text-primary px-2 py-1 rounded focus:border-brand-primary/60 outline-none"
+      />
+      {saving && <Loader2 size={12} className="animate-spin text-brand-primary" />}
+      {examDate && (
+        <button
+          data-testid="clear-exam-date-btn"
+          onClick={() => handleSave(null)}
+          disabled={saving}
+          className="text-xs font-mono text-risk-high hover:opacity-80 transition-opacity"
+        >
+          Löschen
+        </button>
+      )}
+      <button
+        onClick={() => setEditing(false)}
+        className="text-text-muted hover:text-text-secondary"
+      >
+        <X size={13} />
+      </button>
+    </div>
+  );
+}
 
 // ─── Doc type badge ───────────────────────────────────────────────────────────
 const DOC_TYPE_COLORS = {
@@ -413,13 +506,19 @@ function ReportedTab({ packId, onCountChange }) {
 }
 
 // ─── Session modal ────────────────────────────────────────────────────────────
-function StartSessionModal({ packId, concepts, onClose, onStart }) {
+function StartSessionModal({ packId, pack, concepts, onClose, onStart }) {
   const [duration, setDuration] = useState(10);
   const [docTypeFilter, setDocTypeFilter] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const availableTypes = [...new Set(concepts.map(c => c.doc_type).filter(Boolean))].sort();
   const filteredCount = docTypeFilter ? concepts.filter(c => c.doc_type === docTypeFilter).length : concepts.length;
+
+  // Urgency state
+  const examDays = daysUntil(pack?.exam_date);
+  const urgencyMultiplier = examDays !== null && examDays <= 30
+    ? examDays < 3 ? 2.5 : examDays < 7 ? 2.0 : examDays < 15 ? 1.6 : 1.3
+    : null;
 
   const handleStart = async () => {
     setLoading(true);
@@ -440,6 +539,42 @@ function StartSessionModal({ packId, concepts, onClose, onStart }) {
           <h3 className="font-heading text-lg font-semibold">Session starten</h3>
           <button onClick={onClose} className="text-text-secondary hover:text-white" data-testid="close-session-modal"><X size={18} /></button>
         </div>
+
+        {/* Urgency warning */}
+        {examDays !== null && examDays >= 0 && examDays < 7 && (
+          <div
+            data-testid="urgency-warning"
+            className="mb-4 flex items-start gap-2 rounded-lg px-3 py-2.5 border"
+            style={{
+              background: 'rgba(255,45,85,0.08)',
+              borderColor: 'rgba(255,45,85,0.3)',
+            }}
+          >
+            <AlertTriangle size={14} className="text-risk-high flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-risk-high">
+                {examDays === 0 ? 'Prüfung heute!' : `Prüfung in ${examDays} Tag${examDays !== 1 ? 'en' : ''}!`}
+              </p>
+              <p className="text-xs text-risk-high/70 mt-0.5">
+                Risikoscore aller Konzepte wird mit ×{urgencyMultiplier} multipliziert.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Urgency info for 7–30 days */}
+        {examDays !== null && examDays >= 7 && examDays <= 30 && (
+          <div
+            data-testid="urgency-info"
+            className="mb-4 flex items-center gap-2 rounded-lg px-3 py-2 border"
+            style={{ background: 'rgba(255,149,0,0.06)', borderColor: 'rgba(255,149,0,0.2)' }}
+          >
+            <Clock size={12} className="text-yellow-500 flex-shrink-0" />
+            <p className="text-xs text-yellow-500/80">
+              Prüfung in {examDays} Tagen – Urgency-Multiplikator ×{urgencyMultiplier} aktiv
+            </p>
+          </div>
+        )}
 
         {availableTypes.length > 1 && (
           <div className="mb-5">
@@ -503,7 +638,6 @@ export default function StudyPackDetail() {
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [activeTab, setActiveTab] = useState('concepts'); // 'concepts' | 'reported'
   const [reportedCount, setReportedCount] = useState(0);
-
   const fetchData = useCallback(async () => {
     try {
       const [packRes, conceptsRes, reportedRes] = await Promise.all([
@@ -529,6 +663,7 @@ export default function StudyPackDetail() {
   const onSessionStart = (sessionData) => navigate(`/session/${sessionData.session_id}`, {
     state: { currentItem: sessionData.current_item, total: sessionData.total, packTitle: pack?.title },
   });
+  const onExamDateUpdate = (newDate) => setPack(prev => ({ ...prev, exam_date: newDate }));
 
   if (loading) {
     return <div className="min-h-screen bg-bg-primary flex items-center justify-center"><Loader2 size={24} className="animate-spin text-brand-primary" /></div>;
@@ -552,7 +687,14 @@ export default function StudyPackDetail() {
               </div>
               <h1 className="font-heading text-2xl font-bold text-text-primary">{pack?.title}</h1>
               {pack?.description && <p className="text-sm text-text-secondary mt-1">{pack.description}</p>}
-              <p className="text-xs font-mono text-text-muted mt-1">{concepts.length} Konzepte</p>
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                <p className="text-xs font-mono text-text-muted">{concepts.length} Konzepte</p>
+                <ExamDateSection
+                  packId={packId}
+                  examDate={pack?.exam_date}
+                  onUpdate={onExamDateUpdate}
+                />
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
@@ -628,7 +770,7 @@ export default function StudyPackDetail() {
       </div>
 
       {showSessionModal && (
-        <StartSessionModal packId={packId} concepts={concepts} onClose={() => setShowSessionModal(false)} onStart={onSessionStart} />
+        <StartSessionModal packId={packId} pack={pack} concepts={concepts} onClose={() => setShowSessionModal(false)} onStart={onSessionStart} />
       )}
     </div>
   );

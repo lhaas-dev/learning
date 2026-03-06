@@ -26,6 +26,8 @@ export const login = (email, password) =>
 export const createPack = (data) => api.post('/api/packs', data);
 export const listPacks = () => api.get('/api/packs');
 export const getPack = (id) => api.get(`/api/packs/${id}`);
+export const updatePackExamDate = (packId, examDate) =>
+  api.patch(`/api/packs/${packId}/exam-date`, { exam_date: examDate ?? null });
 
 // Upload
 export const uploadMaterial = (packId, formData) =>

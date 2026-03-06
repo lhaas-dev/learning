@@ -769,6 +769,41 @@ def calculate_risk(recall_probability: float, exam_weight: float, dependency_wei
     return round((1.0 - recall_probability) * exam_weight * dependency_weight, 4)
 
 
+def days_until_exam(exam_date_str: Optional[str]) -> Optional[int]:
+    """Return days until exam (0 = today, negative = past). None if no date set."""
+    if not exam_date_str:
+        return None
+    try:
+        exam_dt = datetime.fromisoformat(exam_date_str.replace("Z", "+00:00"))
+        if exam_dt.tzinfo is None:
+            exam_dt = exam_dt.replace(tzinfo=timezone.utc)
+        delta = exam_dt.date() - datetime.now(timezone.utc).date()
+        return delta.days
+    except Exception:
+        return None
+
+
+def urgency_multiplier(exam_date_str: Optional[str]) -> float:
+    """
+    Urgency multiplier for risk scores based on days until exam.
+    >30 days  → 1.0 (no boost)
+    15–30     → 1.3
+    7–14      → 1.6
+    3–6       → 2.0
+    <3        → 2.5
+    """
+    days = days_until_exam(exam_date_str)
+    if days is None or days > 30:
+        return 1.0
+    if days >= 15:
+        return 1.3
+    if days >= 7:
+        return 1.6
+    if days >= 3:
+        return 2.0
+    return 2.5  # 0-2 days (or overdue)
+
+
 def update_stability(stability: float, rating: str) -> float:
     multipliers = {"again": 0.7, "hard": 1.1, "good": 1.3, "easy": 2.0}
     return round(max(0.1, stability * multipliers.get(rating, 1.0)), 4)
@@ -816,6 +851,10 @@ class CreatePackRequest(BaseModel):
     title: str
     description: str = ""
     domain: str = ""
+
+
+class ExamDateRequest(BaseModel):
+    exam_date: Optional[str] = None  # ISO date YYYY-MM-DD or null to clear
 
 
 class UpdateConceptRequest(BaseModel):
@@ -923,6 +962,30 @@ async def get_pack(pack_id: str, user=Depends(get_current_user)):
     if not pack:
         raise HTTPException(status_code=404, detail="Pack not found")
     return doc_id(pack)
+
+
+@app.patch("/api/packs/{pack_id}/exam-date")
+async def set_exam_date(pack_id: str, req: ExamDateRequest, user=Depends(get_current_user)):
+    """Set or clear the exam date for a study pack."""
+    try:
+        pack = await packs_col.find_one({"_id": ObjectId(pack_id), "owner_id": str(user["_id"])})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid pack ID")
+    if not pack:
+        raise HTTPException(status_code=404, detail="Pack not found")
+
+    if req.exam_date is None:
+        await packs_col.update_one({"_id": ObjectId(pack_id)}, {"$unset": {"exam_date": ""}})
+    else:
+        # Validate ISO date format
+        try:
+            datetime.fromisoformat(req.exam_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format, use YYYY-MM-DD")
+        await packs_col.update_one({"_id": ObjectId(pack_id)}, {"$set": {"exam_date": req.exam_date}})
+
+    updated = await packs_col.find_one({"_id": ObjectId(pack_id)})
+    return doc_id(updated)
 
 
 # ─── Upload & AI Pipeline (Background Task) ──────────────────────────────────
@@ -1722,12 +1785,14 @@ async def start_session(req: StartSessionRequest, user=Depends(get_current_user)
         concepts_list = filtered
 
     # Calculate risk per concept and build prioritized queue
+    exam_date_str = pack.get("exam_date")
+    urgency_mult = urgency_multiplier(exam_date_str)
     prioritized = []
     for concept in concepts_list:
         concept_id = str(concept["_id"])
         ucs = await get_or_create_ucs(user_id, concept_id, concept.get("exam_weight", 1.0))
         recall = calculate_recall_probability(ucs["stability"], ucs.get("last_reviewed_at"))
-        risk = calculate_risk(recall, concept.get("exam_weight", 1.0))
+        risk = round(calculate_risk(recall, concept.get("exam_weight", 1.0)) * urgency_mult, 4)
 
         check_type = select_check_type(recall)
         check = await checks_col.find_one({"concept_id": concept_id, "type": check_type})
@@ -1760,6 +1825,8 @@ async def start_session(req: StartSessionRequest, user=Depends(get_current_user)
         "completed_at": None,
         "stats": {"again": 0, "hard": 0, "good": 0, "easy": 0},
         "total": len(queue),
+        "urgency_multiplier": urgency_mult,
+        "exam_date": exam_date_str,
     }
     result = await sessions_col.insert_one(session_doc)
     session_id = str(result.inserted_id)
